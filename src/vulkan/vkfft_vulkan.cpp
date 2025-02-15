@@ -11,7 +11,7 @@
 #include <fstream>
 #include <memory>
 using namespace std;
-#include "vkFFT.h"
+#include "../../VkFFT/vkFFT/vkFFT.h"
 //typedef float2 Complex;
 
 #ifdef _WIN32
@@ -67,7 +67,7 @@ LIBRARY_API VkFFTConfiguration* make_config(const long*, const size_t, VkBuffer,
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
                                 const int, const int, const int, const int, const int, const int, const int,
-                                const long*);
+                                const long*, const char*);
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
 
@@ -187,7 +187,7 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const long* grouped_batch)
+                                const int warpSize, const long* grouped_batch, const char* name)
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
   
@@ -206,6 +206,9 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
   config->normalize = norm;
   config->performR2C = r2c;
   config->performDCT = dct;
+  config->dirkName = name;
+  
+  //config->makeForwardPlanOnly=1;
 
   if(disableReorderFourStep>=0)
     config->disableReorderFourStep = disableReorderFourStep;

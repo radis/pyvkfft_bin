@@ -61,7 +61,7 @@ _vkfft_vulkan = ctypes.cdll.LoadLibrary(vkfft_path)
 ##silent = os.open(os.devnull, os.O_WRONLY)
 
 
-def prepare_fft(arr_in, arr_out=None, ndim=1, norm=1, compute_app=None, tune=False):
+def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None, tune=False):
 
     tune_config = {"backend": "pycuda"} if tune else None
 
@@ -87,6 +87,7 @@ def prepare_fft(arr_in, arr_out=None, ndim=1, norm=1, compute_app=None, tune=Fal
         r2c=True,
         strides=arr_in.strides,
         tune_config=tune_config,
+        name=name,
     )
 
 
@@ -144,6 +145,7 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_int,
     ctypes.c_int,
     ctype_int_size_p,
+    ctypes.c_char_p,
 ]
 
 _vkfft_vulkan.init_app.restype = _types.vkfft_app
@@ -192,6 +194,7 @@ class VkFFTApp(VkFFTAppBase):
         axes=None,
         strides=None,
         tune_config=None,
+        name="",
         **kwargs,
     ):
 
@@ -292,7 +295,7 @@ class VkFFTApp(VkFFTAppBase):
         self.queue = _types.VkQueue(getVulkanPtr(queue))
         self.commandPool = _types.VkCommandPool(getVulkanPtr(command_pool))
         self.fence = _types.VkFence(getVulkanPtr(fence))
-
+        self.name= name.encode()
         # buf = ctypes.create_string_buffer(256)
 
         self.config = self._make_config()
@@ -416,6 +419,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoost4Step),
             int(self.warpSize),
             grouped_batch,
+            self.name,
         )
 
     def getBufSize(self, src):

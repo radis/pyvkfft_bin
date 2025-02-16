@@ -1,8 +1,0 @@
-Debug file.
-make_config: 000001FF6C4F7A20 
-000001FF03276C10, 000001FF6CBDA840
-301056 1 1 1, FFTdim: 1
-1204232
-1204224
-
- End of debug file.

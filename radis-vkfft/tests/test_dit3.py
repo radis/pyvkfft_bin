@@ -54,7 +54,7 @@ def mock_spectrum(Nl, t_min=0.0, t_max=1.0, w_min=0.0, w_max=1.0):
 
 t_min = 0.0
 t_max = 100.0
-Nt = 300001
+Nt = 500001
 Nt = next_fast_len_even(Nt)
 print("Nt = {:d}".format(Nt))
 t_arr = np.linspace(t_min, t_max, Nt)

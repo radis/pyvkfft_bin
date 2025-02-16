@@ -378,6 +378,10 @@ class VkFFTApp(VkFFTAppBase):
         self.bufInSize = 4 * shape[0] * n_batch
         self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
 
+        # override batch number
+        #n_batch = 1 if len(self.shape) == 1 else 6#self.shape[-2]
+
+
         if self.r2c and self.inplace:
             # the last two columns are ignored in the R array, and will be used
             # in the C array with a size nx//2+1
@@ -438,7 +442,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoostNonPow2),
             int(self.registerBoost4Step),
             int(self.warpSize),
-            int(1),
+            1,#int(1), #dynamic offsets
             grouped_batch,
             self.name,
         )

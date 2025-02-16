@@ -343,7 +343,7 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
        << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
 	   << "stride_in: "  <<config->inputBufferStride[0] << " " <<config->inputBufferStride[1] << " " << config->inputBufferStride[2] << " " << config->inputBufferStride[3]<< " , isInputFormatted " <<  config->isInputFormatted << endl
 	   << "stride_out: " <<config->outputBufferStride[0] << " " <<config->outputBufferStride[1] << " " << config->outputBufferStride[2] << " " << config->outputBufferStride[3] << " , isOutputFormatted " <<  config->isInputFormatted << endl
-       << "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl
+       << "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl;
 	   
   
   myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;

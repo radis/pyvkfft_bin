@@ -1,12 +1,13 @@
+// kernel type: 100100
 #version 450
 
 layout (local_size_x = 8, local_size_y = 32, local_size_z = 1) in;
 layout(std430, binding = 0) buffer DataIn{
-	vec2 inputs[1354752];
+	vec2 inputs[150528];
 };
 
 layout(std430, binding = 1) buffer DataOut{
-	vec2 outputs[1354761];
+	vec2 outputs[1204232];
 };
 
 shared vec2 sdata[3072];

@@ -1,12 +1,13 @@
+// kernel type: 20000
 #version 450
 
 layout (local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 layout(std430, binding = 0) buffer DataIn{
-	vec2 inputs[1354753];
+	vec2 inputs[150529];
 };
 
 layout(std430, binding = 1) buffer DataOut{
-	vec2 outputs[1354753];
+	vec2 outputs[150529];
 };
 
 void main() {
@@ -46,11 +47,11 @@ angle = 0.0f;
 shiftX = gl_GlobalInvocationID.x;
 inoutID_x = shiftX % 75264;
 tempInt = shiftX / 75264;
-shiftY = tempInt % 9;
-shiftY = shiftY * 150529;
-shiftZ = shiftZ + shiftY;
+tempInt = gl_GlobalInvocationID.z / 1;
+tempInt = tempInt * 150529;
+shiftZ = shiftZ + tempInt;
 shiftZ = shiftZ + 0;
-if (shiftX < 677376) {
+if (shiftX < 75264) {
 inoutID = inoutID_x + shiftZ;
 temp_0 = inputs[inoutID];
 if (inoutID_x == 0) {

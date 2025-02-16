@@ -1,0 +1,10 @@
+Debug file.
+make_config: 000002A33748BFF0 
+000002A35ED18250, 000002A3509661C0
+size: 301056 1 1 1, FFTdim: 1
+skip: 0 0 0 0, nbatch: 8
+1204232
+1204224
+FFT1 fwd 1 inv 0
+
+ End of debug file.

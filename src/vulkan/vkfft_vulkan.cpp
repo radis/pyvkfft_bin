@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <string>  //DvdB
 using namespace std;
 #include "../../VkFFT/vkFFT/vkFFT.h"
 //typedef float2 Complex;
@@ -191,8 +192,10 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
   
-
-  myfile.open ("outputtt.txt");
+  std::string fname = "";
+  fname += name;
+  fname += "_debug.txt";
+  myfile.open (fname);
   myfile << "Debug file.\n";
   
   
@@ -320,7 +323,8 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
 
   myfile << "make_config: "<<config<<" "<<endl
        << config->buffer<<", "<< *(config->buffer)<< endl
-       << size[0] << " " << size[1] << " " << size[2] << " " << size[3]<< ", FFTdim: " << config->FFTdim << endl
+       << "size: "<<size[0] << " " << size[1] << " " << size[2] << " " << size[3]<< ", FFTdim: " << config->FFTdim << endl
+       << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
        << *(config->bufferSize) << endl 
        << *(config->inputBufferSize) << endl;
   

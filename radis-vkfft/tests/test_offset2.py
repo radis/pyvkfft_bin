@@ -131,7 +131,7 @@ app.spectrum_d.initStagingBuffer()
 app.command_list = [
     #app.cmdClearBuffer(app.spectrum_FT_d),
     app.spectrum_d.cmdTransferStagingBuffer('H2D'),
-    app.cmdFFT(app.spectrum_d, app.spectrum_d, 0, Nrev2*4),
+    app.cmdFFT(app.spectrum_d, app.spectrum_d, 0, Nrev2*2, name='FFT'),
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),
 ]
 app.writeCommandBuffer()

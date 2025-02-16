@@ -2,6 +2,12 @@
 #version 450
 
 layout (local_size_x = 8, local_size_y = 32, local_size_z = 1) in;
+layout(push_constant) uniform PushConsts
+{
+	uint inputOffset;
+	uint outputOffset;
+} consts;
+
 layout(std430, binding = 0) buffer DataIn{
 	vec2 inputs[];
 };
@@ -95,7 +101,7 @@ mult.y = 0.0f;
 shiftX = gl_GlobalInvocationID.x;
 shiftY = gl_WorkGroupID.y;
 shiftZ = shiftY * 150528;
-shiftZ = shiftZ + 0;
+shiftZ = shiftZ + consts.inputOffset;
 tempInt2 = shiftX / 392;
 tempInt2 = tempInt2 * 150528;
 if (tempInt2 < 150528) {
@@ -1290,7 +1296,7 @@ temp_11.y = fma(temp_11.x, mult.y, loc_0.y);
 temp_11.x = loc_0.x;
 shiftY = gl_WorkGroupID.y;
 shiftZ = shiftY * 150529;
-shiftZ = shiftZ + 0;
+shiftZ = shiftZ + consts.outputOffset;
 if (tempInt2 < 150528) {
 inoutID_x = shiftX % 392;
 tempInt = gl_LocalInvocationID.y * 392;

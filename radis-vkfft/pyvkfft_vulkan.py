@@ -118,6 +118,8 @@ _vkfft_vulkan.sync_app.argtypes = [_types.vkfft_app]
 _vkfft_vulkan.make_config.restype = _types.VkFFTConfiguration
 _vkfft_vulkan.make_config.argtypes = [
     ctype_int_size_p,
+    ctypes.c_int,
+    ctypes.c_int,
     ctypes.c_size_t,
     _types.VkBuffer,
     _types.VkBuffer,
@@ -366,6 +368,9 @@ class VkFFTApp(VkFFTAppBase):
         grouped_batch.fill(-1)
         grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
 
+        self.bufInSize = 4 * shape[0] * n_batch
+        self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
+
         if self.r2c and self.inplace:
             # the last two columns are ignored in the R array, and will be used
             # in the C array with a size nx//2+1
@@ -397,6 +402,8 @@ class VkFFTApp(VkFFTAppBase):
         # _vkfft_vulkan.get_dev_props(ctypes.byref(ptr), buf)
         return _vkfft_vulkan.make_config(
             shape,
+            self.bufInSize,
+            self.bufOutSize,
             FFTdim,
             self.bufferSrc,
             self.bufferDest,

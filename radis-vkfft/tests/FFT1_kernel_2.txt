@@ -1,13 +1,13 @@
-// kernel type: 20000
+// kernel type: 200000
 #version 450
 
 layout (local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 layout(std430, binding = 0) buffer DataIn{
-	vec2 inputs[150529];
+	vec2 inputs[1204232];
 };
 
 layout(std430, binding = 1) buffer DataOut{
-	vec2 outputs[150529];
+	vec2 outputs[1204232];
 };
 
 void main() {

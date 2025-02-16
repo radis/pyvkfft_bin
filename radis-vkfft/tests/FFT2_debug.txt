@@ -1,8 +1,11 @@
 Debug file.
-make_config: 000002A3604EB290 
-000002A35ED2E1E0, 000002A350979C90
+make_config: 000002434FB1D0A0 
+00000243683F0940, 000002434F996190
 size: 301056 1 1 1, FFTdim: 1
 skip: 0 0 0 0, nbatch: 1
+stride_in: 0 0 0 0 , isInputFormatted 1
+stride_out: 0 0 0 0 , isOutputFormatted 1
+inputBufferSize: 00000243683F0920 , outputBufferSize: 00000243683F0810
 1204232
 1204224
 FFT2 fwd 0 inv 1

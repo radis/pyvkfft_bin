@@ -1,0 +1,13 @@
+Debug file.
+make_config: 000001F486597CB0 
+000001F4871FF4F0, 000001F487327C00
+size: 301056 1 1 1, FFTdim: 1
+skip: 0 0 0 0, nbatch: 6
+stride_in: 0 0 0 0 , isInputFormatted 1
+stride_out: 0 0 0 0 , isOutputFormatted 1
+inputBufferSize: 000001F4871FF380 , outputBufferSize: 000001F4871FF440
+7225392
+7225344
+FFT1 fwd 1 inv 0
+
+ End of debug file.

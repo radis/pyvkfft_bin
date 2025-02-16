@@ -174,14 +174,14 @@ class GPUApplication(object):
             },
         )
 
-    def cmdFFT(self, buf, buf_FT, timestamp=False):
-        def func(self, buf, buf_FT, timestamp=False):
+    def cmdFFT(self, buf, buf_FT, name="", timestamp=False):
+        def func(self, buf, buf_FT, name="" , timestamp=False):
             key = (id(buf), id(buf_FT))
 
             try:
                 fft_app = self._fftApps[key]
             except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, compute_app=self)
+                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self)
                 self._fftApps[key] = fft_app
             
             fft_app.fft(self._commandBuffer, buf._buffer, buf_FT._buffer)
@@ -193,16 +193,16 @@ class GPUApplication(object):
             else:
                 pass
 
-        return GPUCommand(func, [self, buf, buf_FT], {"timestamp": timestamp})
+        return GPUCommand(func, [self, buf, buf_FT], {"timestamp": timestamp, "name": name})
 
-    def cmdIFFT(self, buf_FT, buf, timestamp=False):
-        def func(self, buf_FT, buf, timestamp=False):
+    def cmdIFFT(self, buf_FT, buf, name="", timestamp=False):
+        def func(self, buf_FT, buf, name="", timestamp=False):
             key = (id(buf), id(buf_FT))
 
             try:
                 fft_app = self._fftApps[key]
             except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, compute_app=self)
+                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self)
                 self._fftApps[key] = fft_app
 
             fft_app.ifft(self._commandBuffer, buf_FT._buffer, buf._buffer)
@@ -214,7 +214,7 @@ class GPUApplication(object):
             else:
                 pass
 
-        return GPUCommand(func, [self, buf_FT, buf], {"timestamp": timestamp})
+        return GPUCommand(func, [self, buf_FT, buf], {"timestamp": timestamp, "name": name})
 
     def run(self):
         self.runCommandBuffer()

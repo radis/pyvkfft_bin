@@ -208,7 +208,12 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
   config->performDCT = dct;
   config->dirkName = name;
   
-  //config->makeForwardPlanOnly=1;
+  if (strcmp(name,"FFT1")==0){
+	config->makeForwardPlanOnly=1;
+  }
+  else if (strcmp(name,"FFT2")==0) {
+  	config->makeInversePlanOnly=1;
+  }
 
   if(disableReorderFourStep>=0)
     config->disableReorderFourStep = disableReorderFourStep;
@@ -319,6 +324,7 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
        << *(config->bufferSize) << endl 
        << *(config->inputBufferSize) << endl;
   
+  myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
   
   myfile << "\n End of debug file.\n";
   myfile.close();

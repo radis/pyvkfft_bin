@@ -74,7 +74,7 @@ threads = (Ntpb, 1, 1)
 w0 = 0.0
 seed(1)
 Nl = 200
-Nw = 8
+Nw = 7
 
 w_min = 0.1
 w_max = 3.0

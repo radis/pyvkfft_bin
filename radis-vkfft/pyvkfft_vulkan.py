@@ -61,7 +61,7 @@ _vkfft_vulkan = ctypes.cdll.LoadLibrary(vkfft_path)
 ##silent = os.open(os.devnull, os.O_WRONLY)
 
 
-def prepare_fft(arr_in, arr_out=None, ndim=1, norm=1, compute_app=None, tune=False):
+def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None, tune=False):
 
     tune_config = {"backend": "pycuda"} if tune else None
 
@@ -87,6 +87,7 @@ def prepare_fft(arr_in, arr_out=None, ndim=1, norm=1, compute_app=None, tune=Fal
         r2c=True,
         strides=arr_in.strides,
         tune_config=tune_config,
+        name=name,
     )
 
 
@@ -117,6 +118,8 @@ _vkfft_vulkan.sync_app.argtypes = [_types.vkfft_app]
 _vkfft_vulkan.make_config.restype = _types.VkFFTConfiguration
 _vkfft_vulkan.make_config.argtypes = [
     ctype_int_size_p,
+    ctypes.c_int,
+    ctypes.c_int,
     ctypes.c_size_t,
     _types.VkBuffer,
     _types.VkBuffer,
@@ -145,6 +148,7 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_int,
     ctypes.c_int,
     ctype_int_size_p,
+    ctypes.c_char_p,
 ]
 
 _vkfft_vulkan.init_app.restype = _types.vkfft_app
@@ -199,6 +203,7 @@ class VkFFTApp(VkFFTAppBase):
         axes=None,
         strides=None,
         tune_config=None,
+        name="",
         **kwargs,
     ):
 
@@ -299,7 +304,7 @@ class VkFFTApp(VkFFTAppBase):
         self.queue = _types.VkQueue(getVulkanPtr(queue))
         self.commandPool = _types.VkCommandPool(getVulkanPtr(command_pool))
         self.fence = _types.VkFence(getVulkanPtr(fence))
-
+        self.name= name.encode()
         # buf = ctypes.create_string_buffer(256)
 
         self.config = self._make_config()
@@ -355,14 +360,23 @@ class VkFFTApp(VkFFTAppBase):
         skip = np.zeros(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
         # skip[:len(self.skip_axis)] = self.skip_axis
 
-        shape[: len(self.shape)] = self.shape[::-1]
-        skip[1 : len(self.shape)] = 1
-        FFTdim = len(self.shape)
-        n_batch = 1
+        # shape[: len(self.shape)] = self.shape[::-1]
+        # skip[1 : len(self.shape)] = 1
+        # FFTdim = len(self.shape)
+        # n_batch = 1
+
+
+        shape[0] = self.shape[-1]
+        # skip[1 : len(self.shape)] = 1
+        FFTdim = 1
+        n_batch = 1 if len(self.shape) == 1 else self.shape[-2]
 
         grouped_batch = np.empty(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
         grouped_batch.fill(-1)
         grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
+
+        self.bufInSize = 4 * shape[0] * n_batch
+        self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
 
         if self.r2c and self.inplace:
             # the last two columns are ignored in the R array, and will be used
@@ -395,6 +409,8 @@ class VkFFTApp(VkFFTAppBase):
         # _vkfft_vulkan.get_dev_props(ctypes.byref(ptr), buf)
         return _vkfft_vulkan.make_config(
             shape,
+            self.bufInSize,
+            self.bufOutSize,
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
@@ -424,6 +440,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.warpSize),
             int(1),
             grouped_batch,
+            self.name,
         )
 
     def getBufSize(self, src):

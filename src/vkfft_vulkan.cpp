@@ -10,8 +10,9 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <string>  //DvdB
 using namespace std;
-#include "vkFFT.h"
+#include "../../VkFFT/vkFFT/vkFFT.h"
 //typedef float2 Complex;
 
 #ifdef _WIN32
@@ -61,13 +62,14 @@ double __wrap_pow(double x, double y)
 }
 #endif
 
-LIBRARY_API VkFFTConfiguration* make_config(const long*, const size_t, VkBuffer, VkBuffer, 
+LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, 
                                 VkPhysicalDevice*, VkDevice*, VkQueue*,
                                 VkCommandPool*, VkFence*, uint64_t,
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
                                 const int, const int, const int, const int, const int, const int, const int, const int, 
-                                const long*);
+                                const long*, const char*);
+
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
 
@@ -178,7 +180,7 @@ int get_buf_size(VkBuffer buffer, VkDevice* dev){
 
 ofstream myfile;
 
-VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
+VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int bufOutSize,  const size_t fftdim,
                                 VkBuffer buffer, VkBuffer buffer_out, 
                                 VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
                                 VkCommandPool* commandPool, VkFence* fence, uint64_t isCompilerInitialized,
@@ -189,12 +191,15 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const int specifyOffset, const long* grouped_batch)
+                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name)
+
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
   
-
-  myfile.open ("outputtt.txt");
+  std::string fname = "";
+  fname += name;
+  fname += "_debug.txt";
+  myfile.open (fname);
   myfile << "Debug file.\n";
   
   
@@ -208,6 +213,16 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
   config->normalize = norm;
   config->performR2C = r2c;
   config->performDCT = dct;
+  config->dirkName = name;
+
+  
+  if (strcmp(name,"FFT1")==0){
+	config->makeForwardPlanOnly=1;
+
+  }
+  else if (strcmp(name,"FFT2")==0) {
+  	config->makeInversePlanOnly=1;
+  }
 
   if (specifyOffset>=0)
     config->specifyOffsetsAtLaunch = specifyOffset;
@@ -265,32 +280,34 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
   *pbuf = buffer;
 
   uint64_t* psize = new uint64_t;
-  uint64_t* psizein = psize;
-
+  //uint64_t* psizein = psize;
+  uint64_t* psizein = new uint64_t;
+  
   int s =  size[0];
   for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++) s *= size[i];
+ 
+  config->isInputFormatted = 0;
+  config->isOutputFormatted = 0;
+  config->inverseReturnToInputBuffer = 1;
 
-  if(r2c)
-  {
-    *psize = (uint64_t)((s / 2 +1) * precision * (size_t)2);
-    if(buffer_out != NULL)
-    {
-      psizein = new uint64_t;
-      *psizein = (uint64_t)(s * precision);
-      //config->isInputFormatted = 0;
-      config->inverseReturnToInputBuffer = 1;
-	  config->inputBufferStride[0] = size[0];
-      for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
-        config->inputBufferStride[i] = size[i] * config->inputBufferStride[i-1];
-    }
-  }
-  else
-  {
-    if(dct) *psize = (uint64_t)(s * precision);
-    else *psize = (uint64_t)(s * precision * (size_t)2);
-  }
-
-  config->bufferSize = psize;
+  // if(r2c)
+  // {
+    // *psize = (uint64_t)((s / 2 +1) * precision * (size_t)2);
+    // if(buffer_out != NULL)
+    // {
+      // psizein = new uint64_t;
+      // *psizein = (uint64_t)(s * precision);
+      // config->inverseReturnToInputBuffer = 1;
+	  // //config->inputBufferStride[0] = size[0];
+      // //for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
+      // //  config->inputBufferStride[i] = size[i] * config->inputBufferStride[i-1];
+    // }
+  // }
+  // else
+  // {
+    // if(dct) *psize = (uint64_t)(s * precision);
+    // else *psize = (uint64_t)(s * precision * (size_t)2);
+  // }
   
   //DvdB: Now we remove the padding size from the fast FT dimension:
   //if(r2c) config->size[0] -= 2;
@@ -305,7 +322,7 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
     config->buffer = pbufout;
     config->inputBuffer = pbuf;
 
-    config->inputBufferSize = psizein;
+    //config->inputBufferSize = psizein;
 
     config->isInputFormatted = 1;
   }
@@ -313,14 +330,24 @@ VkFFTConfiguration* make_config(const long* size, const size_t fftdim,
   {
     config->buffer = pbuf;
   }
-  cout << "Hello everyone! Please get yourself comfortable while the Config is being made!\n";
+
+  psizein[0] = bufInSize;
+  psize[0] = bufOutSize;
+  config->inputBufferSize = psizein;
+  config->bufferSize = psize;
+  
 
   myfile << "make_config: "<<config<<" "<<endl
        << config->buffer<<", "<< *(config->buffer)<< endl
-       << size[0] << " " << size[1] << " " << size[2] << " " << size[3]<< ", FFTdim: " << config->FFTdim << endl
-       << *(config->bufferSize) << endl 
+       << "size: "<<size[0] << " " << size[1] << " " << size[2] << " " << size[3]<< ", FFTdim: " << config->FFTdim << endl
+       << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
+	   << "stride_in: "  <<config->inputBufferStride[0] << " " <<config->inputBufferStride[1] << " " << config->inputBufferStride[2] << " " << config->inputBufferStride[3]<< " , isInputFormatted " <<  config->isInputFormatted << endl
+	   << "stride_out: " <<config->outputBufferStride[0] << " " <<config->outputBufferStride[1] << " " << config->outputBufferStride[2] << " " << config->outputBufferStride[3] << " , isOutputFormatted " <<  config->isInputFormatted << endl
+       << "inputBufferSize: "<< config->inputBufferSize << " , outputBufferSize: " << config->bufferSize <<endl
+	   << *(config->bufferSize) << endl 
        << *(config->inputBufferSize) << endl;
   
+  myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
   
   myfile << "\n End of debug file.\n";
   myfile.close();

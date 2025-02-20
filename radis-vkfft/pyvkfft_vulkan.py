@@ -76,6 +76,8 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         arr_in.dtype,
         buffer_src=arr_in._buffer,
         buffer_dst=arr_out._buffer,
+        currentBatchUBO=compute_app.currentBatch_d._buffer,
+        currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
         physical_device=compute_app._physicalDevice,
         device=compute_app._device,
         queue=compute_app._queue,
@@ -123,6 +125,8 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_size_t,
     _types.VkBuffer,
     _types.VkBuffer,
+    _types.VkBuffer,
+    ctypes.c_int,
     ctypes.POINTER(_types.VkPhysicalDevice),
     ctypes.POINTER(_types.VkDevice),
     ctypes.POINTER(_types.VkQueue),
@@ -190,6 +194,8 @@ class VkFFTApp(VkFFTAppBase):
         dtype: type,
         buffer_src,
         buffer_dst,
+        currentBatchUBO,
+        currentBatchUBOOffset,
         physical_device,
         device,
         queue,
@@ -298,7 +304,8 @@ class VkFFTApp(VkFFTAppBase):
 
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer_src))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
-
+        self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
+        self.currentBatchUBOOffset = currentBatchUBOOffset
         self.physicalDevice = _types.VkPhysicalDevice(getVulkanPtr(physical_device))
         self.device = _types.VkDevice(getVulkanPtr(device))
         self.queue = _types.VkQueue(getVulkanPtr(queue))
@@ -418,6 +425,8 @@ class VkFFTApp(VkFFTAppBase):
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
+            self.currentBatchUBO,
+            self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),
             ctypes.byref(self.physicalDevice),
             ctypes.byref(self.device),

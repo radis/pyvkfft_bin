@@ -62,7 +62,7 @@ double __wrap_pow(double x, double y)
 }
 #endif
 
-LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, 
+LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, VkBuffer, int,
                                 VkPhysicalDevice*, VkDevice*, VkQueue*,
                                 VkCommandPool*, VkFence*, uint64_t,
                                 const int, const size_t, const int, const int, const int, const int,
@@ -181,7 +181,7 @@ int get_buf_size(VkBuffer buffer, VkDevice* dev){
 ofstream myfile;
 
 VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int bufOutSize,  const size_t fftdim,
-                                VkBuffer buffer, VkBuffer buffer_out, 
+                                VkBuffer buffer, VkBuffer buffer_out, VkBuffer currentBatchUBO, int currentBatchUBOOffset,
                                 VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
                                 VkCommandPool* commandPool, VkFence* fence, uint64_t isCompilerInitialized,
                                 const int norm, const size_t precision, const int r2c, const int dct,
@@ -214,7 +214,10 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->performR2C = r2c;
   config->performDCT = dct;
   config->dirkName = name;
-
+  
+  config->currentBatchUBO = currentBatchUBO;
+  config->currentBatchUBOSize = 4;
+  config->currentBatchUBOOffset = currentBatchUBOOffset;
   
   if (strcmp(name,"FFT1")==0){
 	config->makeForwardPlanOnly=1;
@@ -262,6 +265,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 
   for(int i=0; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
      if(grouped_batch[i]>0) config->groupedBatch[i] = grouped_batch[i];
+
+  config->dynamicBatch = 1;
 
   switch(precision)
   {

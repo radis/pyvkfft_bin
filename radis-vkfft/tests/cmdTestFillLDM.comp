@@ -81,7 +81,7 @@ void main() {
 	float a11 = a1l * a1k;
 
 	int sk = 1;
-    int sl = init_d.Nt;
+    int sl = 2*init_d.Nf;
     
 	
 	// S_kl_d[i + 0*init_d.Nl] = a00;

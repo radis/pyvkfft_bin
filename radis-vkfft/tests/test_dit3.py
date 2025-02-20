@@ -163,17 +163,17 @@ print('GPU start...')
 shader_path = os.path.dirname(__file__)
 app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
-I_arr2 = np.zeros(Nt, dtype=np.float32)
+I_arr2 = np.zeros(2*Nf, dtype=np.float32)
 
 
 
 app.init_params_d = GPUBuffer(sizeof(init_params_t), uniform=True, binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), uniform=True, binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
-app.S_kl_d = GPUBuffer((Nw+1)*Nt*4, binding=3)
+app.S_kl_d = GPUBuffer((Nw+1)*Nf*8, binding=3)
 app.S_kl_FT_d = GPUBuffer((Nw+1)*Nf*8, binding=4)
 app.spectrum_FT_d = GPUBuffer(Nf*8, binding=5)
-app.spectrum_d = GPUBuffer(Nt*4, binding=6)
+app.spectrum_d = GPUBuffer(Nf*8, binding=6)
 app.currentBatch_d = GPUBuffer(4, uniform=True, binding=7)
 
 
@@ -204,8 +204,8 @@ iter_params_h.a = 0.0
 iter_params_h.Nw = Nw
 iter_params_h.dxw = dxw
 
-app.S_kl_d.setFFTShape((Nw+1,Nt), np.float32)
-app.S_kl_FT_d.setFFTShape((Nw+1,Nf), np.complex64)
+app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
+app.S_kl_FT_d.setFFTShape((Nw,Nf), np.complex64)
 app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
 app.spectrum_d.setFFTShape(Nt, np.float32)
 #app.S_kl_FT_d.initStagingBuffer()
@@ -254,7 +254,7 @@ plt.subplots_adjust(left=0.25, bottom=0.25)
 #p1 = ax.plot(f_arr, S_kl_FT.T.real)
 #p2 = ax.plot(f_arr, S_kl_FT2.T.real, 'k--')
 p1, = ax.plot(t_arr, I_arr1)
-p2, = ax.plot(t_arr, I_arr2, 'k--')
+p2, = ax.plot(t_arr, I_arr2[:Nt], 'k--')
 
 axNw = plt.axes([0.25, 0.05, 0.65, 0.03])
 sNw = Slider(axNw, "Nw", 2, 20, valinit=Nw, valstep=1)

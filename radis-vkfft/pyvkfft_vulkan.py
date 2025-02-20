@@ -382,7 +382,7 @@ class VkFFTApp(VkFFTAppBase):
         grouped_batch.fill(-1)
         grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
 
-        self.bufInSize = 4 * shape[0] * n_batch
+        self.bufInSize = 8 * (shape[0]//2+1) * n_batch
         self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
 
         # override batch number

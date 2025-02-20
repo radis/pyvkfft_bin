@@ -291,8 +291,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   int s =  size[0];
   for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++) s *= size[i];
  
-  config->isInputFormatted = 0;
-  config->isOutputFormatted = 0;
+  //config->isInputFormatted = 0;
+  //config->isOutputFormatted = 0;
   config->inverseReturnToInputBuffer = 1;
 
   // if(r2c)

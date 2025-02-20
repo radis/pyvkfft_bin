@@ -76,6 +76,8 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         arr_in.dtype,
         buffer_src=arr_in._buffer,
         buffer_dst=arr_out._buffer,
+        currentBatchUBO=compute_app.currentBatch_d._buffer,
+        currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
         physical_device=compute_app._physicalDevice,
         device=compute_app._device,
         queue=compute_app._queue,
@@ -123,6 +125,8 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_size_t,
     _types.VkBuffer,
     _types.VkBuffer,
+    _types.VkBuffer,
+    ctypes.c_int,
     ctypes.POINTER(_types.VkPhysicalDevice),
     ctypes.POINTER(_types.VkDevice),
     ctypes.POINTER(_types.VkQueue),
@@ -146,6 +150,7 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_int,
     ctypes.c_int,
     ctypes.c_int,
+    ctypes.c_int,
     ctype_int_size_p,
     ctypes.c_char_p,
 ]
@@ -157,10 +162,16 @@ _vkfft_vulkan.init_app.argtypes = [
 ]
 
 _vkfft_vulkan.fft.restype = ctypes.c_int
-_vkfft_vulkan.fft.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p]
+_vkfft_vulkan.fft.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+
+_vkfft_vulkan.ffto.restype = ctypes.c_int
+_vkfft_vulkan.ffto.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 
 _vkfft_vulkan.ifft.restype = ctypes.c_int
-_vkfft_vulkan.ifft.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p]
+_vkfft_vulkan.ifft.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+
+_vkfft_vulkan.iffto.restype = ctypes.c_int
+_vkfft_vulkan.iffto.argtypes = [_types.vkfft_app, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 
 _vkfft_vulkan.free_app.restype = None
 _vkfft_vulkan.free_app.argtypes = [_types.vkfft_app]
@@ -183,6 +194,8 @@ class VkFFTApp(VkFFTAppBase):
         dtype: type,
         buffer_src,
         buffer_dst,
+        currentBatchUBO,
+        currentBatchUBOOffset,
         physical_device,
         device,
         queue,
@@ -291,7 +304,8 @@ class VkFFTApp(VkFFTAppBase):
 
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer_src))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
-
+        self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
+        self.currentBatchUBOOffset = currentBatchUBOOffset
         self.physicalDevice = _types.VkPhysicalDevice(getVulkanPtr(physical_device))
         self.device = _types.VkDevice(getVulkanPtr(device))
         self.queue = _types.VkQueue(getVulkanPtr(queue))
@@ -371,6 +385,10 @@ class VkFFTApp(VkFFTAppBase):
         self.bufInSize = 4 * shape[0] * n_batch
         self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
 
+        # override batch number
+        #n_batch = 1 if len(self.shape) == 1 else 6#self.shape[-2]
+
+
         if self.r2c and self.inplace:
             # the last two columns are ignored in the R array, and will be used
             # in the C array with a size nx//2+1
@@ -407,6 +425,8 @@ class VkFFTApp(VkFFTAppBase):
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
+            self.currentBatchUBO,
+            self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),
             ctypes.byref(self.physicalDevice),
             ctypes.byref(self.device),
@@ -431,6 +451,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoostNonPow2),
             int(self.registerBoost4Step),
             int(self.warpSize),
+            1,#int(1), #dynamic offsets
             grouped_batch,
             self.name,
         )
@@ -443,7 +464,7 @@ class VkFFTApp(VkFFTAppBase):
     # def sync(self):
     # res = _vkfft_vulkan.sync_app(self.app)
 
-    def fft(self, cmd_buf, src, dest=None):
+    def fft(self, cmd_buf, src, dest=None, offset_in=0, offset_out=0):
         """
         Compute the forward FFT
 
@@ -462,14 +483,15 @@ class VkFFTApp(VkFFTAppBase):
         self.bufferDest = _types.VkBuffer(getVulkanPtr(dest))
         self.commandBufferFwd = _types.VkCommandBuffer(getVulkanPtr(cmd_buf))
 
-        _vkfft_vulkan.fft(
+        _vkfft_vulkan.ffto(
             self.app,
             ctypes.byref(self.commandBufferFwd),
             ctypes.byref(self.bufferSrc),
             ctypes.byref(self.bufferDest),
+            offset_in, offset_out,
         )
 
-    def ifft(self, cmd_buf, src, dest=None):
+    def ifft(self, cmd_buf, src, dest=None, offset_in=0, offset_out=0):
         """
         Compute the backward FFT
 
@@ -487,11 +509,12 @@ class VkFFTApp(VkFFTAppBase):
         self.bufferDest = _types.VkBuffer(getVulkanPtr(dest))
         self.commandBufferRev = _types.VkCommandBuffer(getVulkanPtr(cmd_buf))
 
-        _vkfft_vulkan.ifft(
+        _vkfft_vulkan.iffto(
             self.app,
             ctypes.byref(self.commandBufferRev),
             ctypes.byref(self.bufferDest),
             ctypes.byref(self.bufferSrc),
+            offset_in, offset_out,
         )
 
 

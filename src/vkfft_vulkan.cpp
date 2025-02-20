@@ -62,19 +62,22 @@ double __wrap_pow(double x, double y)
 }
 #endif
 
-LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, 
+LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, VkBuffer, int,
                                 VkPhysicalDevice*, VkDevice*, VkQueue*,
                                 VkCommandPool*, VkFence*, uint64_t,
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
-                                const int, const int, const int, const int, const int, const int, const int,
+                                const int, const int, const int, const int, const int, const int, const int, const int, 
                                 const long*, const char*);
+
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
 
 LIBRARY_API int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out);
+LIBRARY_API int ffto(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out, int offset_in, int offset_out);
 
 LIBRARY_API int ifft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out);
+LIBRARY_API int iffto(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out, int offset_in, int offset_out);
 
 LIBRARY_API int copy_test(char *buf);
 
@@ -178,7 +181,7 @@ int get_buf_size(VkBuffer buffer, VkDevice* dev){
 ofstream myfile;
 
 VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int bufOutSize,  const size_t fftdim,
-                                VkBuffer buffer, VkBuffer buffer_out, 
+                                VkBuffer buffer, VkBuffer buffer_out, VkBuffer currentBatchUBO, int currentBatchUBOOffset,
                                 VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
                                 VkCommandPool* commandPool, VkFence* fence, uint64_t isCompilerInitialized,
                                 const int norm, const size_t precision, const int r2c, const int dct,
@@ -188,7 +191,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const long* grouped_batch, const char* name)
+                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name)
+
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
   
@@ -210,7 +214,10 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->performR2C = r2c;
   config->performDCT = dct;
   config->dirkName = name;
-
+  
+  config->currentBatchUBO = currentBatchUBO;
+  config->currentBatchUBOSize = 4;
+  config->currentBatchUBOOffset = currentBatchUBOOffset;
   
   if (strcmp(name,"FFT1")==0){
 	config->makeForwardPlanOnly=1;
@@ -219,6 +226,9 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   else if (strcmp(name,"FFT2")==0) {
   	config->makeInversePlanOnly=1;
   }
+
+  if (specifyOffset>=0)
+    config->specifyOffsetsAtLaunch = specifyOffset;
 
   if(disableReorderFourStep>=0)
     config->disableReorderFourStep = disableReorderFourStep;
@@ -255,6 +265,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 
   for(int i=0; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
      if(grouped_batch[i]>0) config->groupedBatch[i] = grouped_batch[i];
+
+  config->dynamicBatch = 1;
 
   switch(precision)
   {
@@ -336,9 +348,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
        << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
 	   << "stride_in: "  <<config->inputBufferStride[0] << " " <<config->inputBufferStride[1] << " " << config->inputBufferStride[2] << " " << config->inputBufferStride[3]<< " , isInputFormatted " <<  config->isInputFormatted << endl
 	   << "stride_out: " <<config->outputBufferStride[0] << " " <<config->outputBufferStride[1] << " " << config->outputBufferStride[2] << " " << config->outputBufferStride[3] << " , isOutputFormatted " <<  config->isInputFormatted << endl
-       << "inputBufferSize: "<< config->inputBufferSize << " , outputBufferSize: " << config->bufferSize <<endl
-	   << *(config->bufferSize) << endl 
-       << *(config->inputBufferSize) << endl;
+       << "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl;
+	   
   
   myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
   
@@ -390,6 +401,26 @@ int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuff
   return VkFFTAppend(app, -1, &par);
 }
 
+int ffto(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out, int offset_in, int offset_out)
+{
+
+  (app->configuration.buffer) = out;
+  (app->configuration.inputBuffer) = in;
+  //(app->configuration.outputBuffer) = out;
+
+  VkFFTLaunchParams par = {};
+  par.buffer =  app->configuration.buffer;
+  par.inputBuffer = app->configuration.inputBuffer;
+  par.bufferOffset = offset_out;
+  par.inputBufferOffset = offset_in;
+
+  //par.outputBuffer = app->configuration.outputBuffer;
+  par.commandBuffer = cmd_buffer;
+ 
+  return VkFFTAppend(app, -1, &par);
+}
+
+
 int ifft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer,  VkBuffer* in, VkBuffer* out)
 {
 
@@ -405,6 +436,27 @@ int ifft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer,  VkBuffer* in, VkBu
 
   return VkFFTAppend(app, 1, &par);
 }
+
+
+int iffto(VkFFTApplication* app, VkCommandBuffer* cmd_buffer,  VkBuffer* in, VkBuffer* out, int offset_in, int offset_out)
+{
+
+  (app->configuration.buffer) = out;
+  (app->configuration.inputBuffer) = in;
+  //(app->configuration.outputBuffer) = out;
+
+  VkFFTLaunchParams par = {};
+  par.buffer =  app->configuration.buffer;
+  par.inputBuffer = app->configuration.inputBuffer;
+  par.bufferOffset = offset_out;
+  par.inputBufferOffset = offset_in;
+
+  //par.outputBuffer = app->configuration.outputBuffer;
+  par.commandBuffer = cmd_buffer;
+
+  return VkFFTAppend(app, 1, &par);
+}
+
 
 /** Free memory allocated during make_config()
 *

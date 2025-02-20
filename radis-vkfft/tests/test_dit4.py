@@ -10,20 +10,12 @@ from numpy.fft import rfftfreq
 from numpy.random import rand, randint, seed
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
-from ctypes import Structure, c_float, c_int, sizeof, c_uint
+from ctypes import Structure, c_float, c_int, sizeof
 from time import perf_counter
 import sys
 
 L = lambda t, w: 2 / (w * np.pi) * 1 / (1 + 4 * (t / w) ** 2)
 L_FT = lambda f, w: np.exp(-np.pi * np.abs(f) * w)
-
-
-class currentBatch_t(Structure):
-    _fields_ = [
-        ("N", c_uint),
-        ("N2", c_uint),
-    ]
-
 
 class init_params_t(Structure):
     _fields_ = [
@@ -62,7 +54,7 @@ def mock_spectrum(Nl, t_min=0.0, t_max=1.0, w_min=0.0, w_max=1.0):
 
 t_min = 0.0
 t_max = 100.0
-Nt = 500001
+Nt = 300001
 Nt = next_fast_len_even(Nt)
 print("Nt = {:d}".format(Nt))
 t_arr = np.linspace(t_min, t_max, Nt)
@@ -82,7 +74,7 @@ threads = (Ntpb, 1, 1)
 w0 = 0.0
 seed(1)
 Nl = 200
-Nw = 8
+Nw = 6
 
 w_min = 0.1
 w_max = 3.0
@@ -165,8 +157,6 @@ app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
 I_arr2 = np.zeros(Nt, dtype=np.float32)
 
-
-
 app.init_params_d = GPUBuffer(sizeof(init_params_t), uniform=True, binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), uniform=True, binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
@@ -174,19 +164,10 @@ app.S_kl_d = GPUBuffer((Nw+1)*Nt*4, binding=3)
 app.S_kl_FT_d = GPUBuffer((Nw+1)*Nf*8, binding=4)
 app.spectrum_FT_d = GPUBuffer(Nf*8, binding=5)
 app.spectrum_d = GPUBuffer(Nt*4, binding=6)
-app.currentBatch_d = GPUBuffer(4, uniform=True, binding=7)
-
 
 # initalize data:
 app.database_d.initStagingBuffer()
 app.database_d.copyToBuffer(database)
-
-app._currentBatchUBOOffset = 0
-app.currentBatch_d.initStagingBuffer()
-currentBatch_h = app.currentBatch_d.getHostStructPtr(currentBatch_t)
-currentBatch_h.N = 9
-currentBatch_h.N2 = 5
-app.currentBatch_d.transferStagingBuffer('H2D')
 
 app.init_params_d.initStagingBuffer()
 init_params_h = app.init_params_d.getHostStructPtr(init_params_t)
@@ -210,8 +191,6 @@ app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
 app.spectrum_d.setFFTShape(Nt, np.float32)
 #app.S_kl_FT_d.initStagingBuffer()
 
-
-#app.S_kl_FT_d.initStagingBuffer()
 app.spectrum_d.initStagingBuffer()
 
 app.command_list = [
@@ -221,7 +200,7 @@ app.command_list = [
     app.cmdFFT(app.S_kl_d, app.S_kl_FT_d, 0, 0, name='FFT1'),
     app.cmdTestApplyLineshapes((Nf // Ntpb + 1, 1, 1), threads),
     app.cmdIFFT(app.spectrum_FT_d, app.spectrum_d, 0, 0, name='FFT2'), 
-    app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
+    app.spectrum_d.cmdTransferStagingBuffer('D2H'),
 ]
 app.writeCommandBuffer()
 
@@ -230,24 +209,14 @@ app.writeCommandBuffer()
 app.run()
 app.spectrum_d.toArray(I_arr2)
 
-#arr3 = np.zeros((Nw+1,2*Nf), dtype=np.float32)
-#app.S_kl_FT_d.toArray(arr3)
-#print(arr3[0,:6])
-
 fig, ax = plt.subplots()
 plt.subplots_adjust(left=0.25, bottom=0.25)
-
-
-# plt.plot(arr3.T)
-# plt.xlim(0,100)
-
-
 
 #S_kl_FT2 = np.zeros_like(S_kl_FT)
 #app.S_kl_FT_d.copyFromBuffer(S_kl_FT2)
 
 
-#%%
+
 
 #ax.plot(t_arr, I_arr0)
 

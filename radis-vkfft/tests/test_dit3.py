@@ -170,11 +170,9 @@ I_arr2 = np.zeros(2*Nf, dtype=np.float32)
 app.init_params_d = GPUBuffer(sizeof(init_params_t), uniform=True, binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), uniform=True, binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
-app.S_kl_d = GPUBuffer((Nw+1)*Nf*8, binding=3)
-app.S_kl_FT_d = GPUBuffer((Nw+1)*Nf*8, binding=4)
-app.spectrum_FT_d = GPUBuffer(Nf*8, binding=5)
-app.spectrum_d = GPUBuffer(Nf*8, binding=6)
-app.currentBatch_d = GPUBuffer(4, uniform=True, binding=7)
+app.S_kl_d = GPUBuffer(Nw*Nf*8, binding=3)
+app.spectrum_d = GPUBuffer(Nf*8, binding=4)
+app.currentBatch_d = GPUBuffer(4, uniform=True, binding=5)
 
 
 # initalize data:
@@ -205,8 +203,8 @@ iter_params_h.Nw = Nw
 iter_params_h.dxw = dxw
 
 app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
-app.S_kl_FT_d.setFFTShape((Nw,Nf), np.complex64)
-app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
+#app.S_kl_FT_d.setFFTShape((Nw,Nf), np.complex64)
+#app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
 app.spectrum_d.setFFTShape(Nt, np.float32)
 #app.S_kl_FT_d.initStagingBuffer()
 
@@ -218,9 +216,9 @@ app.command_list = [
     app.iter_params_d.cmdTransferStagingBuffer('H2D'),
     app.cmdClearBuffer(app.S_kl_d),
     app.cmdTestFillLDM((Nl // Ntpb + 1, 1, 1), threads),
-    app.cmdFFT(app.S_kl_d, app.S_kl_FT_d, name='FFT1'),
+    app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFT1'),
     app.cmdTestApplyLineshapes((Nf // Ntpb + 1, 1, 1), threads),
-    app.cmdIFFT(app.spectrum_FT_d, app.spectrum_d, name='FFT2'), 
+    app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFT2'), 
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
 app.writeCommandBuffer()

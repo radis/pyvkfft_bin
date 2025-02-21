@@ -125,6 +125,7 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_size_t,
     _types.VkBuffer,
     _types.VkBuffer,
+    ctypes.c_int,
     _types.VkBuffer,
     ctypes.c_int,
     ctypes.POINTER(_types.VkPhysicalDevice),
@@ -425,6 +426,7 @@ class VkFFTApp(VkFFTAppBase):
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
+            2, #dynamicBatch
             self.currentBatchUBO,
             self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),

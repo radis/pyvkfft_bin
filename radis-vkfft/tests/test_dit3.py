@@ -20,8 +20,8 @@ L_FT = lambda f, w: np.exp(-np.pi * np.abs(f) * w)
 
 class currentBatch_t(Structure):
     _fields_ = [
-        ("N", c_uint),
-        ("N2", c_uint),
+        ("Nfwd", c_uint),
+        ("Ninv", c_uint),
     ]
 
 
@@ -163,7 +163,7 @@ print('GPU start...')
 shader_path = os.path.dirname(__file__)
 app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
-I_arr2 = np.zeros(2*Nf, dtype=np.float32)
+I_arr2 = np.zeros(Nt, dtype=np.float32)
 
 
 
@@ -172,7 +172,7 @@ app.iter_params_d = GPUBuffer(sizeof(iter_params_t), uniform=True, binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
 app.S_kl_d = GPUBuffer(Nw*Nf*8, binding=3)
 app.spectrum_d = GPUBuffer(Nf*8, binding=4)
-app.currentBatch_d = GPUBuffer(4, uniform=True, binding=5)
+app.currentBatch_d = GPUBuffer(8, uniform=True, binding=5)
 
 
 # initalize data:
@@ -182,8 +182,8 @@ app.database_d.copyToBuffer(database)
 app._currentBatchUBOOffset = 0
 app.currentBatch_d.initStagingBuffer()
 currentBatch_h = app.currentBatch_d.getHostStructPtr(currentBatch_t)
-currentBatch_h.N = 9
-currentBatch_h.N2 = 5
+currentBatch_h.Nfwd = 8
+currentBatch_h.Ninv = 1
 app.currentBatch_d.transferStagingBuffer('H2D')
 
 app.init_params_d.initStagingBuffer()
@@ -205,28 +205,26 @@ iter_params_h.dxw = dxw
 app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
 #app.S_kl_FT_d.setFFTShape((Nw,Nf), np.complex64)
 #app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
-app.spectrum_d.setFFTShape(Nt, np.float32)
+#app.spectrum_d.setFFTShape(Nt, np.float32)
 #app.S_kl_FT_d.initStagingBuffer()
-
-
-#app.S_kl_FT_d.initStagingBuffer()
-app.spectrum_d.initStagingBuffer()
+#app.spectrum_d.initStagingBuffer()
+app.S_kl_d.initStagingBuffer(4*Nt)
 
 app.command_list = [
     app.iter_params_d.cmdTransferStagingBuffer('H2D'),
     app.cmdClearBuffer(app.S_kl_d),
     app.cmdTestFillLDM((Nl // Ntpb + 1, 1, 1), threads),
-    app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFT1'),
+    app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
     app.cmdTestApplyLineshapes((Nf // Ntpb + 1, 1, 1), threads),
-    app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFT2'), 
-    app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
+    app.cmdIFFT(app.S_kl_d, app.S_kl_d), 
+    app.S_kl_d.cmdTransferStagingBuffer('D2H'),   
 ]
 app.writeCommandBuffer()
 
 
 # iteration:
 app.run()
-app.spectrum_d.toArray(I_arr2)
+app.S_kl_d.toArray(I_arr2)
 
 #arr3 = np.zeros((Nw+1,2*Nf), dtype=np.float32)
 #app.S_kl_FT_d.toArray(arr3)
@@ -252,7 +250,7 @@ plt.subplots_adjust(left=0.25, bottom=0.25)
 #p1 = ax.plot(f_arr, S_kl_FT.T.real)
 #p2 = ax.plot(f_arr, S_kl_FT2.T.real, 'k--')
 p1, = ax.plot(t_arr, I_arr1)
-p2, = ax.plot(t_arr, I_arr2[:Nt], 'k--')
+p2, = ax.plot(t_arr, I_arr2, 'k--')
 
 axNw = plt.axes([0.25, 0.05, 0.65, 0.03])
 sNw = Slider(axNw, "Nw", 2, 20, valinit=Nw, valstep=1)

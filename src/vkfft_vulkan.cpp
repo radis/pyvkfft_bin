@@ -62,7 +62,7 @@ double __wrap_pow(double x, double y)
 }
 #endif
 
-LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, const int, VkBuffer, int,
+LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, //const int, VkBuffer, int,
                                 const int, VkBuffer, const int, unsigned int*,
 								VkPhysicalDevice*, VkDevice*, VkQueue*,
                                 VkCommandPool*, VkFence*, uint64_t,
@@ -182,7 +182,7 @@ int get_buf_size(VkBuffer buffer, VkDevice* dev){
 ofstream myfile;
 
 VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int bufOutSize,  const size_t fftdim,
-                                VkBuffer buffer, VkBuffer buffer_out, const int dynamicBatch, VkBuffer currentBatchUBO, int currentBatchUBOOffset,
+                                VkBuffer buffer, VkBuffer buffer_out, //const int dynamicBatch, VkBuffer currentBatchUBO, int currentBatchUBOOffset,
                                 const int indirectDispatch, VkBuffer indirectBuffer, const int indirectBufferOffset, unsigned int* indirectHostPointer,
 								VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
                                 VkCommandPool* commandPool, VkFence* fence, uint64_t isCompilerInitialized,
@@ -204,8 +204,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   myfile.open (fname);
   myfile << "Debug file.\n";
   
-  
-  
   config->FFTdim = fftdim;
   for(int i=0; i<VKFFT_MAX_FFT_DIMENSIONS; i++) config->size[i] = size[i];
   config->numberBatches = n_batch;
@@ -216,32 +214,13 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->performR2C = r2c;
   config->performDCT = dct;
   
-  config->dynamicBatch = dynamicBatch;
-  config->currentBatchUBO = currentBatchUBO;
-  
-  
   config->indirectDispatch = indirectDispatch;
   config->indirectBuffer = indirectBuffer;
   config->indirectBufferOffset = indirectBufferOffset;
   config->indirectHostPointer = indirectHostPointer;
   
-  
-  
-  //config->currentBatchUBOSize = 32;
 
-  switch (dynamicBatch){
-	case 1: config->currentBatchUBOSize = 4;
-	case 2: config->currentBatchUBOSize = 8;
-  }
-  config->currentBatchUBOOffset = currentBatchUBOOffset;
-  
-  // if (strcmp(name,"FFT1")==0){
-	// config->makeForwardPlanOnly=1;
-
-  // }
-  // else if (strcmp(name,"FFT2")==0) {
-  	// config->makeInversePlanOnly=1;
-  // }
+  config->inverseReturnToInputBuffer = 1;
 
   if (specifyOffset>=0)
     config->specifyOffsetsAtLaunch = specifyOffset;
@@ -303,34 +282,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   //uint64_t* psizein = psize;
   uint64_t* psizein = new uint64_t;
   
-  int s =  size[0];
-  for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++) s *= size[i];
- 
-  //config->isInputFormatted = 0;
-  //config->isOutputFormatted = 0;
-  config->inverseReturnToInputBuffer = 1;
-
-  // if(r2c)
-  // {
-    // *psize = (uint64_t)((s / 2 +1) * precision * (size_t)2);
-    // if(buffer_out != NULL)
-    // {
-      // psizein = new uint64_t;
-      // *psizein = (uint64_t)(s * precision);
-      // config->inverseReturnToInputBuffer = 1;
-	  // //config->inputBufferStride[0] = size[0];
-      // //for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
-      // //  config->inputBufferStride[i] = size[i] * config->inputBufferStride[i-1];
-    // }
-  // }
-  // else
-  // {
-    // if(dct) *psize = (uint64_t)(s * precision);
-    // else *psize = (uint64_t)(s * precision * (size_t)2);
-  // }
-  
-  //DvdB: Now we remove the padding size from the fast FT dimension:
-  //if(r2c) config->size[0] -= 2;
   
 // Calculations are made in buffer, so with buffer != inputBuffer we keep the original data
   if(buffer_out != NULL)

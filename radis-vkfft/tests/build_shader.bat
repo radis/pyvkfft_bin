@@ -3,5 +3,5 @@
 glslc -O --target-env=vulkan1.0 -ocmdTestShader1.spv cmdTestShader1.comp
 glslc -O --target-env=vulkan1.0 -ocmdTestFillLDM.spv cmdTestFillLDM.comp
 glslc -O --target-env=vulkan1.0 -ocmdTestApplyLineshapes.spv cmdTestApplyLineshapes.comp
-glslc -O --target-env=vulkan1.0 -oout.spv FFT1_kernel_3.comp
+glslc -O --target-env=vulkan1.0 -ocmdTestApplyLineshapesP.spv cmdTestApplyLineshapesP.comp
 pause

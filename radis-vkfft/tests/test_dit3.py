@@ -10,12 +10,24 @@ from numpy.fft import rfftfreq
 from numpy.random import rand, randint, seed
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
-from ctypes import Structure, c_float, c_int, sizeof, c_uint
+from ctypes import Structure, c_float, c_int, sizeof, c_uint, sizeof
 from time import perf_counter
 import sys
 
 L = lambda t, w: 2 / (w * np.pi) * 1 / (1 + 4 * (t / w) ** 2)
 L_FT = lambda f, w: np.exp(-np.pi * np.abs(f) * w)
+
+
+
+class workGroupSize_t(Structure):
+    _fields_ = [
+        ("x", c_uint),
+        ("y", c_uint),
+        ("z", c_uint),
+        ("id", c_uint),
+    ]
+
+workGroupSizeArray_t = workGroupSize_t * 8
 
 
 class currentBatch_t(Structure):
@@ -135,7 +147,7 @@ def spectrum_dit(a):
     I_arr1 = np.zeros(Nt, dtype=np.float32)
     spectrum_FT = np.zeros(Nf, dtype=np.complex64)
     S_kl_FT = np.fft.rfft(S_kl)
-    for l in range(Nw):
+    for l in range(5):
         w_l = (1+a)*w_min*np.exp(l*dxw)
 
         #S_k_FT = np.fft.rfft(S_kl[l])
@@ -167,12 +179,12 @@ I_arr2 = np.zeros(Nt, dtype=np.float32)
 
 
 
-app.init_params_d = GPUBuffer(sizeof(init_params_t), uniform=True, binding=0)
-app.iter_params_d = GPUBuffer(sizeof(iter_params_t), uniform=True, binding=1)
+app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
+app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
 app.S_kl_d = GPUBuffer(Nw*Nf*8, binding=3)
-app.spectrum_d = GPUBuffer(Nf*8, binding=4)
-app.currentBatch_d = GPUBuffer(8, uniform=True, binding=5)
+app.currentBatch_d = GPUBuffer(sizeof(currentBatch_t), usage='uniform')
+app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
 
 # initalize data:
@@ -202,25 +214,50 @@ iter_params_h.a = 0.0
 iter_params_h.Nw = Nw
 iter_params_h.dxw = dxw
 
+app.indirect_d.initStagingBuffer()
+indirect_h = app.indirect_d.getHostStructPtr(workGroupSizeArray_t)
+app._indirect_h = indirect_h
+
 app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
-#app.S_kl_FT_d.setFFTShape((Nw,Nf), np.complex64)
-#app.spectrum_FT_d.setFFTShape(Nf, np.complex64)
-#app.spectrum_d.setFFTShape(Nt, np.float32)
-#app.S_kl_FT_d.initStagingBuffer()
-#app.spectrum_d.initStagingBuffer()
 app.S_kl_d.initStagingBuffer(4*Nt)
 
 app.command_list = [
+    app.indirect_d.cmdTransferStagingBuffer('H2D'),
     app.iter_params_d.cmdTransferStagingBuffer('H2D'),
     app.cmdClearBuffer(app.S_kl_d),
-    app.cmdTestFillLDM((Nl // Ntpb + 1, 1, 1), threads),
+    app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
     app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
-    app.cmdTestApplyLineshapes((Nf // Ntpb + 1, 1, 1), threads),
-    app.cmdIFFT(app.S_kl_d, app.S_kl_d), 
+    app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
+    app.cmdIFFT(app.S_kl_d, app.S_kl_d, name='FFTb'), 
     app.S_kl_d.cmdTransferStagingBuffer('D2H'),   
 ]
 app.writeCommandBuffer()
 
+
+update_dict = {}
+for i, wg in enumerate(indirect_h):
+    inverse = wg.id & 1
+    r2c = (wg.id & 2) >> 1
+
+    if inverse:
+        wg.y = 1
+        wg.z = 1
+    else:
+        update_dict[i] = 'y' if r2c else 'z'
+
+    #print(wg.x, wg.y, wg.z, wg.id, inverse, r2c)
+        
+
+for i in update_dict:
+    wg = indirect_h[i]
+    setattr(wg,update_dict[i],5)
+
+for i, wg in enumerate(indirect_h):
+    inverse = wg.id & 1
+    r2c = (wg.id & 2) >> 1
+
+    print(wg.x, wg.y, wg.z, wg.id,':', inverse, r2c)
+   
 
 # iteration:
 app.run()
@@ -264,29 +301,35 @@ def update(val):
     
 
     a = sw.val
+    Nw_i = sNw.val
 
     t0 = perf_counter()
-    I_arr1 = spectrum_dit(a)
+    #I_arr1 = spectrum_dit(a)
     t1 = perf_counter()
 
-    if sNw.val != Nw_i:
-        #print('new val', sNw.val)
-        Nw_i = sNw.val
-        dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
-        iter_params_h.Nw = Nw_i
-        iter_params_h.dxw = dxw_i
-        app.S_kl_d.setFFTShape((Nw_i+1, Nt))
-        app.S_kl_FT_d.setFFTShape((Nw_i+1, Nf))
-        #app.updateDescriptorSet(app._descriptorSets[0])
+    # if sNw.val != Nw_i:
+    #     #print('new val', sNw.val)
+    #     Nw_i = sNw.val
+    #     dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
+    #     #iter_params_h.Nw = Nw_i
+    #     iter_params_h.dxw = dxw_i
+    #     #app.S_kl_d.setFFTShape((Nw_i, Nt))
+    #     #app.S_kl_FT_d.setFFTShape((Nw_i+1, Nf))
+    #     #app.updateDescriptorSet(app._descriptorSets[0])
 
-        app.freeCommandBuffer()
-        app.writeCommandBuffer()
+    #     #app.freeCommandBuffer()
+    #     #app.writeCommandBuffer()
         
 
+    #indirect_h[1].z = Nw_i
     
+    for i in update_dict:
+        wg = indirect_h[i]
+        setattr(wg,update_dict[i], Nw_i)
+
     iter_params_h.a = a
     app.run()
-    app.spectrum_d.toArray(I_arr2)
+    app.S_kl_d.toArray(I_arr2)
     t2 = perf_counter()
 
     ax.set_title('CPU: {:.1f} ms - GPU: {:.1f} ms'.format((t1-t0)*1e3, (t2-t1)*1e3))

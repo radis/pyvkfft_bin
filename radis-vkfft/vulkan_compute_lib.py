@@ -115,11 +115,11 @@ class GPUApplication(object):
         shader_fnames = [f for f in os.listdir(self._shaderPath) if f[-3:] == "spv"]
         for shader_fname in shader_fnames:
             fun_name = shader_fname.split(".")[0]  # TODO: do this with os.path.basename
-            #named_shader = staticmethod(partial(self.schedule_shader, shader_fname))
-            named_shader = staticmethod(partial(self.schedule_shader, shader_fname))
+            #named_shader = staticmethod(partial(self.cmdScheduleShader, shader_fname))
+            named_shader = staticmethod(partial(self.cmdScheduleShader, shader_fname))
             setattr(self.__class__, fun_name, named_shader)
 
-    def schedule_shader(
+    def cmdScheduleShader(
         self,
         shader_fname=None,
         global_workgroup=(1, 1, 1),
@@ -173,6 +173,68 @@ class GPUApplication(object):
                 "timestamp": timestamp,
             },
         )
+
+
+
+    def cmdScheduleShaderIndirect(
+        self,
+        shader_fname=None,
+        indirect_buffer=None,
+        indirect_offset=0,
+        local_workgroup=(1, 1, 1),
+        sync=True,
+        timestamp=False,
+    ):
+        def func(
+            self,
+            shader_fname=None,
+            indirect_buffer=None,
+            indirect_offset=0,
+            local_workgroup=(1, 1, 1),
+            sync=True,
+            timestamp=False,
+        ):
+
+            shader_fpath = os.path.join(self._shaderPath, shader_fname)
+
+            # Compute Pipeline:
+            pipeline, pipelineLayout, computeShaderModule = self.createComputePipeline(
+                shader_fpath, local_workgroup, self._descriptorSetLayouts[0]
+            )
+            self.bindAndDispatchIndirect(
+                indirect_buffer, indirect_offset, self._descriptorSets[0], pipeline, pipelineLayout
+            )
+            if sync:
+                self.sync()
+
+            self._computeShaderModules.append(computeShaderModule)
+            
+            self._pipelineLayouts.append(pipelineLayout)
+            self._pipelines.append(pipeline)
+
+            if timestamp == True:
+                self.cmdAddTimestamp(shader_fname.split(".")[0]).writeCommand()
+            elif isinstance(timestamp, str):
+                self.cmdAddTimestamp(timestamp).writeCommand()
+            else:
+                pass
+
+        return GPUCommand(
+            func,
+            [
+                self,
+            ],
+            {
+                "shader_fname": shader_fname,
+                "indirect_buffer": indirect_buffer,
+                "indirect_offset": indirect_offset,
+                "local_workgroup": local_workgroup,
+                "sync": sync,
+                "timestamp": timestamp,
+            },
+        )
+
+
 
     def cmdFFT(self, buf, buf_FT, name="", timestamp=False):
         def func(self, buf, buf_FT, name="", timestamp=False):
@@ -730,6 +792,33 @@ class GPUApplication(object):
     # vk.vkEndCommandBuffer(self._commandBuffer)
     
     
+    def bindAndDispatchIndirect(self, indirect_buffer, indirect_offset, descriptorSet, pipeline, pipelineLayout):
+        # We need to bind a pipeline, AND a descriptor set before we dispatch.
+        # The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
+        vk.vkCmdBindPipeline(
+            self._commandBuffer, vk.VK_PIPELINE_BIND_POINT_COMPUTE, pipeline
+        )
+        vk.vkCmdBindDescriptorSets(
+            self._commandBuffer,
+            vk.VK_PIPELINE_BIND_POINT_COMPUTE,
+            pipelineLayout,
+            0,
+            1,
+            [descriptorSet],
+            0,
+            None,
+        )
+
+        # Calling vkCmdDispatch basically starts the compute pipeline, and executes the compute shader.
+        # The number of workgroups is specified in the arguments.
+        # If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
+        vk.vkCmdDispatchIndirect(self._commandBuffer, indirect_buffer._buffer, indirect_offset)
+
+    # def endCommandBuffer(self):
+    # vk.vkEndCommandBuffer(self._commandBuffer)
+    
+    
+    
     def createBuffer(self, bufferSize, 
                      kind=vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                      descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -938,16 +1027,19 @@ class GPUCommand:
 
 
 class GPUBuffer:
-    def __init__(self, bufferSize=0, uniform=False, binding=None, app=None):
+    def __init__(self, bufferSize=0, usage='storage', binding=None, app=None):
         # customization:
 
-        if uniform:
+        if usage == 'indirect':
+            self._usage = vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+            self._descriptorType = None
+        elif usage == 'uniform':
             self._usage = vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
             self._descriptorType = vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-        else:
+        else:# usage == 'storage':
             self._usage = vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-            self._descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-
+            self._descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER    
+            
         self._bufferSize = bufferSize
         self._dstBinding = binding
 

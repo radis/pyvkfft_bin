@@ -63,7 +63,8 @@ double __wrap_pow(double x, double y)
 #endif
 
 LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, const size_t, VkBuffer, VkBuffer, const int, VkBuffer, int,
-                                VkPhysicalDevice*, VkDevice*, VkQueue*,
+                                const int, VkBuffer, const int, unsigned int*,
+								VkPhysicalDevice*, VkDevice*, VkQueue*,
                                 VkCommandPool*, VkFence*, uint64_t,
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
@@ -182,7 +183,8 @@ ofstream myfile;
 
 VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int bufOutSize,  const size_t fftdim,
                                 VkBuffer buffer, VkBuffer buffer_out, const int dynamicBatch, VkBuffer currentBatchUBO, int currentBatchUBOOffset,
-                                VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
+                                const int indirectDispatch, VkBuffer indirectBuffer, const int indirectBufferOffset, unsigned int* indirectHostPointer,
+								VkPhysicalDevice* physicalDevice, VkDevice* device, VkQueue* queue,
                                 VkCommandPool* commandPool, VkFence* fence, uint64_t isCompilerInitialized,
                                 const int norm, const size_t precision, const int r2c, const int dct,
                                 const int disableReorderFourStep, const int registerBoost,
@@ -213,10 +215,18 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->normalize = norm;
   config->performR2C = r2c;
   config->performDCT = dct;
-  config->dirkName = name;
   
   config->dynamicBatch = dynamicBatch;
   config->currentBatchUBO = currentBatchUBO;
+  
+  
+  config->indirectDispatch = indirectDispatch;
+  config->indirectBuffer = indirectBuffer;
+  config->indirectBufferOffset = indirectBufferOffset;
+  config->indirectHostPointer = indirectHostPointer;
+  
+  
+  
   //config->currentBatchUBOSize = 32;
 
   switch (dynamicBatch){

@@ -78,6 +78,8 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         buffer_dst=arr_out._buffer,
         currentBatchUBO=compute_app.currentBatch_d._buffer,
         currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
+        indirectBuffer=compute_app.indirect_d._buffer,
+        indirectHost=compute_app._indirect_h,
         physical_device=compute_app._physicalDevice,
         device=compute_app._device,
         queue=compute_app._queue,
@@ -128,6 +130,12 @@ _vkfft_vulkan.make_config.argtypes = [
     ctypes.c_int,
     _types.VkBuffer,
     ctypes.c_int,
+    
+    ctypes.c_int,
+    _types.VkBuffer,
+    ctypes.c_int,
+    ctypes.c_void_p,
+    
     ctypes.POINTER(_types.VkPhysicalDevice),
     ctypes.POINTER(_types.VkDevice),
     ctypes.POINTER(_types.VkQueue),
@@ -197,6 +205,8 @@ class VkFFTApp(VkFFTAppBase):
         buffer_dst,
         currentBatchUBO,
         currentBatchUBOOffset,
+        indirectBuffer,
+        indirectHost,
         physical_device,
         device,
         queue,
@@ -307,6 +317,8 @@ class VkFFTApp(VkFFTAppBase):
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
         self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
         self.currentBatchUBOOffset = currentBatchUBOOffset
+        self.indirectBuffer = _types.VkBuffer(getVulkanPtr(indirectBuffer))
+        self.indirectHost = indirectHost
         self.physicalDevice = _types.VkPhysicalDevice(getVulkanPtr(physical_device))
         self.device = _types.VkDevice(getVulkanPtr(device))
         self.queue = _types.VkQueue(getVulkanPtr(queue))
@@ -426,10 +438,14 @@ class VkFFTApp(VkFFTAppBase):
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
-            2, #dynamicBatch
+            0, #dynamicBatch
             self.currentBatchUBO,
             self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),
+            3,
+            self.indirectBuffer,
+            0,
+            ctypes.byref(self.indirectHost),
             ctypes.byref(self.physicalDevice),
             ctypes.byref(self.device),
             ctypes.byref(self.queue),

@@ -221,8 +221,8 @@ app.spectrum_d.initStagingBuffer()
 app.command_list = [
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
     app.iter_params_d.cmdTransferStagingBuffer('H2D'),
-    app.cmdClearBuffer(app.S_kl_d),
-    app.cmdClearBuffer(app.spectrum_d),
+    app.S_kl_d.cmdClearBuffer(),
+    app.spectrum_d.cmdClearBuffer(),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
     app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
     #app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),

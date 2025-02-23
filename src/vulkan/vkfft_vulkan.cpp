@@ -218,7 +218,8 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->indirectBuffer = indirectBuffer;
   config->indirectBufferOffset = indirectBufferOffset;
   config->indirectHostPointer = indirectHostPointer;
-  
+
+  config->debugName = name;
 
   config->inverseReturnToInputBuffer = 1;
   

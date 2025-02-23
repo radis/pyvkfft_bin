@@ -1212,6 +1212,9 @@ class GPUBuffer:
                                                             "size":size, 
                                                             "transfer_now":False})
 
+    def cmdClearBuffer(self, timestamp=False):
+        return self.app.cmdClearBuffer(self, timestamp=timestamp)
+
 
     def setFFTShape(self, shape, dtype=None, order='c', grow_only=True):
         self.shape = np.atleast_1d(shape)

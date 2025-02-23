@@ -71,8 +71,9 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
     else:
         inplace = False
     return VkFFTApp(
-        arr_in.shape,
-        arr_in.dtype,
+        (arr_in._batchSize, arr_in._fftSize),
+        arr_in._dtype,
+        buffer_size=arr_in._bufferSize,
         buffer_src=arr_in._buffer,
         buffer_dst=arr_out._buffer,
         #currentBatchUBO=compute_app.currentBatch_d._buffer,
@@ -89,7 +90,7 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         inplace=inplace,
         norm=norm,
         r2c=True,
-        strides=arr_in.strides,
+        #strides=arr_in.strides,
         tune_config=tune_config,
         name=name,
         exclusivePlan=exclusivePlan,
@@ -202,6 +203,7 @@ class VkFFTApp(VkFFTAppBase):
         self,
         shape_in,
         dtype: type,
+        buffer_size,
         buffer_src,
         buffer_dst,
         #currentBatchUBO,
@@ -220,7 +222,7 @@ class VkFFTApp(VkFFTAppBase):
         r2c=False,
         dct=False,
         axes=None,
-        strides=None,
+        #strides=None,
         tune_config=None,
         name="",
         exclusivePlan=0,
@@ -312,10 +314,11 @@ class VkFFTApp(VkFFTAppBase):
             r2c=r2c,
             dct=dct,
             axes=axes,
-            strides=strides,
+            #strides=strides,
             **kwargs,
         )
 
+        self.bufferSize = buffer_size
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer_src))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
         #self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
@@ -356,20 +359,20 @@ class VkFFTApp(VkFFTAppBase):
         VkFFTApplication and VkFFTConfiguration.
         """
 
-        # print('VkFFT.app.__del__... ')
-        # print('free_app @',hex(self.app), end='... ')
+        #print('VkFFT.app.__del__... ')
+        #print('free_app @',hex(self.app), end='... ')
         if self.app is not None:
             _vkfft_vulkan.free_app(self.app)
             self.app = None
-        # print('Done!')
+        #print('Done!')
 
-        # print('free_config @',hex(self.config), end='... ')
+        #print('free_config @',hex(self.config), end='... ')
         if self.config is not None:
             _vkfft_vulkan.free_config(self.config)
             self.config = None
-        # print('Done!')
+        #print('Done!')
 
-        # print('VkFFT.app.__del__ done!')
+        #print('VkFFT.app.__del__ done!')
 
     def _make_config(self):
         """Create a vkfft configuration for a FFT transform"""
@@ -394,14 +397,14 @@ class VkFFTApp(VkFFTAppBase):
         shape[0] = self.shape[-1]
         # skip[1 : len(self.shape)] = 1
         FFTdim = 1
-        n_batch = 1 if len(self.shape) == 1 else self.shape[-2]
+        n_batch = self.shape[-2]
 
         grouped_batch = np.empty(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
         grouped_batch.fill(-1)
         grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
 
-        self.bufInSize = 8 * (shape[0]//2+1) * n_batch
-        self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
+        # self.bufInSize = 8 * (shape[0]//2+1) * n_batch
+        # self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
         
         indirectDispatch = 1 if self.exclusivePlan == 1 else 0
 
@@ -437,10 +440,13 @@ class VkFFTApp(VkFFTAppBase):
         # print('physicalDevice:', '0x'+hex(self.compute_app.getVulkanPtr('_physicalDevice'))[2:].upper())
         # ptr = ctypes.c_void_p(self.compute_app.getVulkanPtr('_physicalDevice'))
         # _vkfft_vulkan.get_dev_props(ctypes.byref(ptr), buf)
+        
+        print(shape, n_batch)
+        
         return _vkfft_vulkan.make_config(
             shape,
-            self.bufInSize,
-            self.bufOutSize,
+            self.bufferSize,
+            self.bufferSize,
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
@@ -457,7 +463,7 @@ class VkFFTApp(VkFFTAppBase):
             ctypes.byref(self.queue),
             ctypes.byref(self.commandPool),
             ctypes.byref(self.fence),
-            0,
+            0, #isCompilerInitialized
             norm,
             self.precision,
             int(self.r2c),
@@ -466,8 +472,8 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoost),
             int(self.use_lut),
             int(self.keepShaderCode),
-            min(6,n_batch),
-            #n_batch,
+            #min(6,n_batch),
+            n_batch,
             skip,
             int(self.coalescedMemory),
             int(self.numSharedBanks),

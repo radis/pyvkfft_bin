@@ -221,7 +221,7 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 
   config->debugName = name;
 
-  config->inverseReturnToInputBuffer = 1;
+  //config->inverseReturnToInputBuffer = 1;
   
   switch (exclusive_plan) {  
 	case  1: config->makeForwardPlanOnly = 1; break;
@@ -294,6 +294,10 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   psize[0] = bufInSize;
   config->bufferSize = psize;
   
+  //debug: try to turn off optimizations
+  config->disableMergeSequencesR2C = 1;
+  config->useLUT = -1;
+  
 
   myfile << "make_config: "<<config<<" "<<endl
        << config->buffer<<", "<< *(config->buffer)<< endl
@@ -321,8 +325,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 VkFFTApplication* init_app(const VkFFTConfiguration* config, int *res)
 {
     
-  //cout << "Hello everyone! Please get yourself comfortable while the Config is being made!\n";
-
   VkFFTApplication* app = new VkFFTApplication({});
   *res = initializeVkFFT(app, *config);
   /*
@@ -378,13 +380,13 @@ VkFFTApplication* init_app(const VkFFTConfiguration* config, int *res)
 int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out)
 {
 
-  (app->configuration.buffer) = out;
-  (app->configuration.inputBuffer) = in;
+  //(app->configuration.buffer) = out;
+  //(app->configuration.inputBuffer) = in;
   //(app->configuration.outputBuffer) = out;
 
   VkFFTLaunchParams par = {};
-  par.buffer =  app->configuration.buffer;
-  par.inputBuffer = app->configuration.inputBuffer;
+  //par.buffer =  app->configuration.buffer;
+  //par.inputBuffer = app->configuration.inputBuffer;
   //par.outputBuffer = app->configuration.outputBuffer;
   par.commandBuffer = cmd_buffer;
  
@@ -394,15 +396,15 @@ int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuff
 int ffto(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out, int offset_in, int offset_out)
 {
 
-  (app->configuration.buffer) = out;
-  (app->configuration.inputBuffer) = in;
+  //(app->configuration.buffer) = out;
+  //(app->configuration.inputBuffer) = in;
   //(app->configuration.outputBuffer) = out;
 
   VkFFTLaunchParams par = {};
-  par.buffer =  app->configuration.buffer;
-  par.inputBuffer = app->configuration.inputBuffer;
-  par.bufferOffset = offset_out;
-  par.inputBufferOffset = offset_in;
+  //par.buffer =  app->configuration.buffer;
+  //par.inputBuffer = app->configuration.inputBuffer;
+  //par.bufferOffset = offset_out;
+  //par.inputBufferOffset = offset_in;
 
   //par.outputBuffer = app->configuration.outputBuffer;
   par.commandBuffer = cmd_buffer;

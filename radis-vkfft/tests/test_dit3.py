@@ -29,14 +29,6 @@ class workGroupSize_t(Structure):
 
 workGroupSizeArray_t = workGroupSize_t * 4
 
-
-class currentBatch_t(Structure):
-    _fields_ = [
-        ("Nfwd", c_uint),
-        ("Ninv", c_uint),
-    ]
-
-
 class init_params_t(Structure):
     _fields_ = [
         ("Nl", c_int),
@@ -182,8 +174,8 @@ I_arr2 = np.zeros(Nt, dtype=np.float32)
 app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
-app.S_kl_d = GPUBuffer(Nw*Nf*8, binding=3)
-app.spectrum_d = GPUBuffer(Nf*8, binding=4)
+app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
+app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
 
@@ -211,12 +203,9 @@ app.indirect_d.initStagingBuffer()
 indirect_h = app.indirect_d.getHostStructPtr(workGroupSizeArray_t)
 app._indirect_h = indirect_h
 
-app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
-#app.S_kl_d.initStagingBuffer(4*Nt)
+app.S_kl_d.setBatchSize(Nw)
 
-app.spectrum_d.setFFTShape((Nt,), np.float32)
 app.spectrum_d.initStagingBuffer()
-
 
 app.command_list = [
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
@@ -225,8 +214,8 @@ app.command_list = [
     app.spectrum_d.cmdClearBuffer(),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
     app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
-    #app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
-    app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
+    app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
+    #app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
     app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFTb'), 
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
@@ -241,12 +230,12 @@ for i, wg in enumerate(indirect_h):
     if not inverse:
         update_dict[i] = 'y' if r2c else 'z'
 
-    #print(wg.x, wg.y, wg.z, wg.id, inverse, r2c)
-        
+    #print(f'({wg.x:3d}, {wg.y:3d}, {wg.z:3d}) : {inverse:1d}, {r2c:1d}')
+       
 
-# for i in update_dict:
-#     wg = indirect_h[i]
-#     setattr(wg,update_dict[i], Nw)
+for i in update_dict:
+    wg = indirect_h[i]
+    setattr(wg,update_dict[i], Nw)
 
 for i, wg in enumerate(indirect_h):
     inverse = wg.id & 1
@@ -296,30 +285,23 @@ def update(val):
     
 
     a = sw.val
-    Nw_i = sNw.val
+    #Nw_i = sNw.val
 
     t0 = perf_counter()
     #I_arr1 = spectrum_dit(a)
     t1 = perf_counter()
 
     if sNw.val != Nw_i:
-        #print('new val', sNw.val)
         Nw_i = sNw.val
         dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
         iter_params_h.Nw = Nw_i
         iter_params_h.dxw = dxw_i
-        app.S_kl_d.setFFTShape((Nw_i, Nt))
-        app.updateDescriptorSet(app._descriptorSets[0])
-
-        #app.freeCommandBuffer()
-        #app.writeCommandBuffer()
+        app.S_kl_d.setBatchSize(Nw_i)
         
-
-    #indirect_h[1].z = Nw_i
+        for i in update_dict:
+            wg = indirect_h[i]
+            setattr(wg,update_dict[i], Nw_i)
     
-    for i in update_dict:
-        wg = indirect_h[i]
-        setattr(wg,update_dict[i], Nw_i)
 
     iter_params_h.a = a
     app.run()

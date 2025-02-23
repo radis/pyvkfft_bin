@@ -10,6 +10,7 @@ from functools import partial
 
 import numpy as np
 import vulkan as vk
+import sys
 
 ##from radis.gpu.vulkan.pyvkfft_vulkan import prepare_fft
 from pyvkfft_vulkan import prepare_fft
@@ -32,19 +33,22 @@ class GPUApplication(object):
         self.verbose = verbose
         # self._deviceID = deviceID
         self._shaderPath = path
-        self._fftApps = {}
+        #self._fftApps = {}
+        self._fftAppFwd = None
+        self._fftAppInv = None
         self._descriptorSetInitialized = False
 
 
         self._computeShaderModules = []
-        self._descriptorPools = []
-        self._descriptorSetLayouts = []
-        self._descriptorSets = []
+        self._descriptorPool = None
+        self._descriptorSetLayout = None
+        self._descriptorSet = None
         self._pipelineLayouts = []
         self._pipelines = []
 
         self._commandPool = None
         self._commandBuffer = None
+        self._commandBufferInitialized = False
         self._oneTimeCommandBuffer = None
         self.command_list = []
         self._queryPool = None
@@ -63,26 +67,23 @@ class GPUApplication(object):
         self.selectPhysicalDevice(deviceID, verbose=verbose)
         self.createDevice()
         self.init_shaders()
-
-        self.createCommandBuffer()
+        
 
     def free(self):
 
         self.command_list = []
 
-        fft_keys = [*self._fftApps.keys()]
-        for key in fft_keys:
-            del self._fftApps[key]
-
+        self._fftAppFwd = None
+        self._fftAppInv = None
+        
         for bufferObject in self._bufferObjects:
             bufferObject.free()
 
         for computeShaderModule in self._computeShaderModules:
             vk.vkDestroyShaderModule(self._device, computeShaderModule, None)
-        for descriptorPool in self._descriptorPools:
-            vk.vkDestroyDescriptorPool(self._device, descriptorPool, None)
-        for descriptorSetLayout in self._descriptorSetLayouts:
-            vk.vkDestroyDescriptorSetLayout(self._device, descriptorSetLayout, None)
+        
+        vk.vkDestroyDescriptorPool(self._device, self._descriptorPool, None)
+        vk.vkDestroyDescriptorSetLayout(self._device, self._descriptorSetLayout, None)
         for pipelineLayout in self._pipelineLayouts:
             vk.vkDestroyPipelineLayout(self._device, pipelineLayout, None)
         for pipeline in self._pipelines:
@@ -140,10 +141,10 @@ class GPUApplication(object):
 
             # Compute Pipeline:
             pipeline, pipelineLayout, computeShaderModule = self.createComputePipeline(
-                shader_fpath, local_workgroup, self._descriptorSetLayouts[0]
+                shader_fpath, local_workgroup, self._descriptorSetLayout
             )
             self.bindAndDispatch(
-                global_workgroup, self._descriptorSets[0], pipeline, pipelineLayout
+                global_workgroup, self._descriptorSet, pipeline, pipelineLayout
             )
             if sync:
                 self.sync()
@@ -199,10 +200,10 @@ class GPUApplication(object):
 
             # Compute Pipeline:
             pipeline, pipelineLayout, computeShaderModule = self.createComputePipeline(
-                shader_fpath, local_workgroup, self._descriptorSetLayouts[0]
+                shader_fpath, local_workgroup, self._descriptorSetLayout
             )
             self.bindAndDispatchIndirect(
-                indirect_buffer, indirect_offset, self._descriptorSets[0], pipeline, pipelineLayout
+                indirect_buffer, indirect_offset, self._descriptorSet, pipeline, pipelineLayout
             )
             if sync:
                 self.sync()
@@ -238,15 +239,10 @@ class GPUApplication(object):
 
     def cmdFFT(self, buf, buf_FT, name="", timestamp=False):
         def func(self, buf, buf_FT, name="", timestamp=False):
-            key = (id(buf), id(buf_FT))
-
-            try:
-                fft_app = self._fftApps[key]
-            except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=0,exclusivePlan=1)
-                self._fftApps[key] = fft_app
             
-            fft_app.fft(self._commandBuffer, buf._buffer, buf_FT._buffer)
+            if self._fftAppFwd is None:
+                self._fftAppFwd = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=0, exclusivePlan=1)
+            self._fftAppFwd.fft(self._commandBuffer, buf._buffer, buf_FT._buffer)
 
             if timestamp == True:
                 self.cmdAddTimestamp("fft").writeCommand()
@@ -259,15 +255,10 @@ class GPUApplication(object):
 
     def cmdIFFT(self, buf_FT, buf, name="", timestamp=False):
         def func(self, buf_FT, buf, name="", timestamp=False):
-            key = (id(buf), id(buf_FT))
-
-            try:
-                fft_app = self._fftApps[key]
-            except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
-                self._fftApps[key] = fft_app
-
-            fft_app.ifft(self._commandBuffer, buf_FT._buffer, buf._buffer)
+            
+            if self._fftAppInv is None:
+                self._fftAppInv = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
+            self._fftAppInv.ifft(self._commandBuffer, buf_FT._buffer, buf._buffer)
 
             if timestamp == True:
                 self.cmdAddTimestamp("fft").writeCommand()
@@ -559,40 +550,18 @@ class GPUApplication(object):
             self._device, commandBufferAllocateInfo
         )
         
+        self._commandBufferInitialized = True
+        
         
 
 
     def initDescriptorSet(self):
         # Descriptor set:
-        descriptorSetLayout = self.createDescriptorSetLayout()
-        descriptorPool = self.createDescriptorPool()
-        descriptorSet = self.createDescriptorSet(descriptorPool, descriptorSetLayout)
+        self._descriptorSetLayout = self.createDescriptorSetLayout()
+        self._descriptorPool = self.createDescriptorPool()
+        self._descriptorSet = self.createDescriptorSet(self._descriptorPool, self._descriptorSetLayout)
 
-        self._descriptorPools.append(descriptorPool)
-        self._descriptorSetLayouts.append(descriptorSetLayout)
-        self._descriptorSets.append(descriptorSet)
-        
         self._descriptorSetInitialized = True
-
-
-    def writeCommandBuffer(self):
-
-        if not self._descriptorSetInitialized:
-            self.initDescriptorSet()
-            
-        self.updateDescriptorSet(self._descriptorSets[0])
-
-        # Now we shall start recording commands into the newly allocated command buffer.
-        beginInfo = vk.VkCommandBufferBeginInfo(
-            sType=vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            flags=0,  # VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT #VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-        )
-        vk.vkBeginCommandBuffer(self._commandBuffer, beginInfo)
-        for obj in self.command_list:
-            obj.writeCommand()
-
-        vk.vkEndCommandBuffer(self._commandBuffer)
-
 
 
     def createDescriptorSetLayout(self):
@@ -869,6 +838,40 @@ class GPUApplication(object):
         return buffer, bufferMemory, index
 
 
+    def writeCommandBuffer(self):
+
+        if not self._descriptorSetInitialized:
+            #print('Initializing descriptor set... ', end='')
+            self.initDescriptorSet()
+            #print('Done!')
+        
+        #print('Updating descriptor set... ', end='')
+        self.updateDescriptorSet(self._descriptorSet)
+        #print('Done!')
+
+        if self._commandBuffer is None:
+            #print('Creating command buffer... ',end='')
+            self.createCommandBuffer()
+            #print('Done!')
+        else:
+            #print('Resetting command buffer... ', end='')
+            vk.vkQueueWaitIdle(self._queue)
+            vk.vkResetCommandBuffer(self._commandBuffer, 0)
+            #print('Done!')
+
+
+        # Now we shall start recording commands into the newly allocated command buffer.
+        beginInfo = vk.VkCommandBufferBeginInfo(
+            sType=vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            flags=0,  # VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT #VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+        )
+        vk.vkBeginCommandBuffer(self._commandBuffer, beginInfo)
+        for obj in self.command_list:
+            obj.writeCommand()
+
+        vk.vkEndCommandBuffer(self._commandBuffer)
+        #print('Command buffer written!')
+
     def runCommandBuffer(self):
         # Now we shall finally submit the recorded command buffer to a queue.
         if self._submitInfo is None:
@@ -900,7 +903,8 @@ class GPUApplication(object):
                                 commandBufferCount=1, 
                                 pCommandBuffers=[self._commandBuffer],
                                 )
-                                
+        #print('Command buffer freed!')
+        
     def oneTimeCommand(self, command, *vargs, **kwargs):
             
             # wait for queue
@@ -1027,7 +1031,7 @@ class GPUCommand:
 
 
 class GPUBuffer:
-    def __init__(self, bufferSize=0, usage='storage', binding=None, app=None):
+    def __init__(self, bufferSize=0, fftSize=None, usage='storage', binding=None, dtype=None, app=None):
         # customization:
 
         if usage == 'indirect':
@@ -1039,8 +1043,16 @@ class GPUBuffer:
         else:# usage == 'storage':
             self._usage = vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             self._descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER    
+        
+        if fftSize is not None:
+            self._fftSize = fftSize
+            self._batchSize = 1
+            self._dtype = np.dtype(np.float32 if dtype is None else dtype)
+            self._itemsize = self._dtype.itemsize
+            self._bufferSize = (self._fftSize // 2 + 1) * 2 * self._itemsize
+        else:
+            self._bufferSize = bufferSize
             
-        self._bufferSize = bufferSize
         self._dstBinding = binding
 
         self._isInitialized = False
@@ -1048,7 +1060,7 @@ class GPUBuffer:
         self._delayedSetDataList = []
         
         self.name = ''
-        self.shape = None
+        #self.shape = None
         self.app = app
         if self.app is not None:
             self.init_buffer()
@@ -1216,56 +1228,23 @@ class GPUBuffer:
         return self.app.cmdClearBuffer(self, timestamp=timestamp)
 
 
-    def setFFTShape(self, shape, dtype=None, order='c', grow_only=True):
-        self.shape = np.atleast_1d(shape)
-
-        if dtype is not None:
-           self.dtype = np.dtype(dtype)
-
-        elif self.dtype is None:
-            print('You must set `dtype` keyword the first time!!')
-            return
-            
-        self.itemsize = self.dtype.itemsize
-        
- 
-        # calc strides:
-        strides = np.zeros_like(self.shape)
-        strides[0] = 1  # TODO: Check this, should maybe be sshape[-1]=1; shape[:-1] = self.shape[:-1]??
-        strides[1:] = self.shape[:-1]
-        strides *= self.itemsize
-
-        if order == "c":
-            self.strides = np.multiply.accumulate(strides[::-1])[::-1]
-        else:
-            self.strides = np.multiply.accumulate(strides)
-        
-        
-        new_size = np.prod(self.shape) * self.itemsize
-        if  new_size > self._bufferSize or (not grow_only and new_size != self._bufferSize):
+    def setBatchSize(self, batch, grow_only=True, factor=1.0):
+        if batch > self._batchSize:
+            self._batchSize = int(factor * batch)
+            new_size = self._batchSize * (self._fftSize // 2 + 1) * 2 * self._itemsize
             self.resize_buffer(new_size)
                     
     
     def resize_buffer(self, nbytes):
-        #print('resizing buffer from',self._bufferSize, 'to',nbytes)
-        # Destroy all FFT apps that reference this buffer:
-        for key in [*self.app._fftApps.keys()]:
-            if id(self) in key:
-                self.app._fftApps.pop(key)
-
-            # if id(self) == key[0]:
-                # fftApp = self.app._fftApps[key]
-                # fftApp.shape = arr_in.shape,
-                # fftApp.buffer_src = arr_in._buffer,
-                # fftApp.strides = arr_in.strides,
-            
-            # elif id(self) == key[1]:
-                # fftApp = self.app._fftApps[key]
-                # fftApp.buffer_dst=arr_out._buffer,
-      
+        print('resizing buffer from',self._bufferSize, 'to', nbytes)
+        self.app._fftAppFwd = None
         self.free()
         self._bufferSize = nbytes
         self.init_buffer()
+        
+        if self.app._commandBuffer is not None: #only rewrite if one already exists
+            self.app.writeCommandBuffer()
+        
         
     # def copyNowH2D(self, srcOffset=0, dstOffset=0, size=1):
     
@@ -1303,10 +1282,10 @@ class GPUBuffer:
         return self._structPtr.contents
     
 
-    def _delayedSetData(self):
-        while len(self._delayedSetDataList):
-            vargs = self._delayedSetDataList.pop(0)
-            self.setData(*vargs) #TODO: Does not currently include kwargs!!!
+    # def _delayedSetData(self):
+    #     while len(self._delayedSetDataList):
+    #         vargs = self._delayedSetDataList.pop(0)
+    #         self.setData(*vargs) #TODO: Does not currently include kwargs!!!
 
     def free(self): #TODO: is this up to date?
         self._isInitialized = False

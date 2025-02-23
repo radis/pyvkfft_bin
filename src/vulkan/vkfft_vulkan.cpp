@@ -288,30 +288,10 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   uint64_t* psize = new uint64_t;
   //uint64_t* psizein = psize;
   uint64_t* psizein = new uint64_t;
-  
-  
-// Calculations are made in buffer, so with buffer != inputBuffer we keep the original data
-  if(buffer_out != NULL)
-  {
 
-    VkBuffer * pbufout = new VkBuffer;
-    *pbufout = buffer_out;
+  config->buffer = pbuf;
 
-    config->buffer = pbufout;
-    config->inputBuffer = pbuf;
-
-    //config->inputBufferSize = psizein;
-
-    //config->isInputFormatted = 1;
-  }
-  else
-  {
-    config->buffer = pbuf;
-  }
-
-  psizein[0] = bufInSize;
-  psize[0] = bufOutSize;
-  config->inputBufferSize = psizein;
+  psize[0] = bufInSize;
   config->bufferSize = psize;
   
 
@@ -321,8 +301,9 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
        << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
 	   << "stride_in: "  <<config->inputBufferStride[0] << " " <<config->inputBufferStride[1] << " " << config->inputBufferStride[2] << " " << config->inputBufferStride[3]<< " , isInputFormatted " <<  config->isInputFormatted << endl
 	   << "stride_out: " <<config->outputBufferStride[0] << " " <<config->outputBufferStride[1] << " " << config->outputBufferStride[2] << " " << config->outputBufferStride[3] << " , isOutputFormatted " <<  config->isInputFormatted << endl
-       << "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl
-	   << "uboSize: "<<config->currentBatchUBOSize<<" , uboOffset: " << config->currentBatchUBOOffset <<endl;
+       //<< "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl
+	   << "bufferSize: "<< config->bufferSize[0] <<endl;
+	   //<< "uboSize: "<<config->currentBatchUBOSize<<" , uboOffset: " << config->currentBatchUBOOffset <<endl;
 	   
 	   
   

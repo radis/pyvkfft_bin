@@ -466,6 +466,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoost),
             int(self.use_lut),
             int(self.keepShaderCode),
+            #min(4,n_batch),
             n_batch,
             skip,
             int(self.coalescedMemory),

@@ -61,7 +61,7 @@ _vkfft_vulkan = ctypes.cdll.LoadLibrary(vkfft_path)
 ##silent = os.open(os.devnull, os.O_WRONLY)
 
 
-def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None, tune=False):
+def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None, tune=False, indirectOffset=0, exclusivePlan=0):
 
     tune_config = {"backend": "pycuda"} if tune else None
 
@@ -70,14 +70,14 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         inplace = True
     else:
         inplace = False
-
     return VkFFTApp(
         arr_in.shape,
         arr_in.dtype,
         buffer_src=arr_in._buffer,
         buffer_dst=arr_out._buffer,
-        currentBatchUBO=compute_app.currentBatch_d._buffer,
-        currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
+        #currentBatchUBO=compute_app.currentBatch_d._buffer,
+        #currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
+        indirectOffset=indirectOffset,
         indirectBuffer=compute_app.indirect_d._buffer,
         indirectHost=compute_app._indirect_h,
         physical_device=compute_app._physicalDevice,
@@ -92,6 +92,7 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         strides=arr_in.strides,
         tune_config=tune_config,
         name=name,
+        exclusivePlan=exclusivePlan,
     )
 
 
@@ -203,8 +204,9 @@ class VkFFTApp(VkFFTAppBase):
         dtype: type,
         buffer_src,
         buffer_dst,
-        currentBatchUBO,
-        currentBatchUBOOffset,
+        #currentBatchUBO,
+        #currentBatchUBOOffset,
+        indirectOffset,
         indirectBuffer,
         indirectHost,
         physical_device,
@@ -221,6 +223,7 @@ class VkFFTApp(VkFFTAppBase):
         strides=None,
         tune_config=None,
         name="",
+        exclusivePlan=0,
         **kwargs,
     ):
 
@@ -315,8 +318,9 @@ class VkFFTApp(VkFFTAppBase):
 
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer_src))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
-        self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
-        self.currentBatchUBOOffset = currentBatchUBOOffset
+        #self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
+        #self.currentBatchUBOOffset = currentBatchUBOOffset
+        self.indirectOffset = indirectOffset
         self.indirectBuffer = _types.VkBuffer(getVulkanPtr(indirectBuffer))
         self.indirectHost = indirectHost
         self.physicalDevice = _types.VkPhysicalDevice(getVulkanPtr(physical_device))
@@ -325,6 +329,7 @@ class VkFFTApp(VkFFTAppBase):
         self.commandPool = _types.VkCommandPool(getVulkanPtr(command_pool))
         self.fence = _types.VkFence(getVulkanPtr(fence))
         self.name= name.encode()
+        self.exclusivePlan = exclusivePlan
         # buf = ctypes.create_string_buffer(256)
 
         self.config = self._make_config()
@@ -397,16 +402,18 @@ class VkFFTApp(VkFFTAppBase):
 
         self.bufInSize = 8 * (shape[0]//2+1) * n_batch
         self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
+        
+        dynamicBatch = 1 if self.exclusivePlan == 1 else 0
 
         # override batch number
         #n_batch = 1 if len(self.shape) == 1 else 6#self.shape[-2]
 
 
-        if self.r2c and self.inplace:
-            # the last two columns are ignored in the R array, and will be used
-            # in the C array with a size nx//2+1
-            shape[0] -= 2
-            print('-2!!!!')
+        # if self.r2c and self.inplace:
+        #     # the last two columns are ignored in the R array, and will be used
+        #     # in the C array with a size nx//2+1
+        #     shape[0] -= 2
+        #     print('-2!!!!')
 
         # s = 0
         # if self.stream is not None:
@@ -428,7 +435,6 @@ class VkFFTApp(VkFFTAppBase):
         # dest_gpudata = 0
 
         # print('physicalDevice:', '0x'+hex(self.compute_app.getVulkanPtr('_physicalDevice'))[2:].upper())
-
         # ptr = ctypes.c_void_p(self.compute_app.getVulkanPtr('_physicalDevice'))
         # _vkfft_vulkan.get_dev_props(ctypes.byref(ptr), buf)
         return _vkfft_vulkan.make_config(
@@ -442,9 +448,9 @@ class VkFFTApp(VkFFTAppBase):
             #self.currentBatchUBO,
             #self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),
-            3,
+            dynamicBatch,
             self.indirectBuffer,
-            0,
+            self.indirectOffset,
             ctypes.byref(self.indirectHost),
             ctypes.byref(self.physicalDevice),
             ctypes.byref(self.device),
@@ -472,6 +478,7 @@ class VkFFTApp(VkFFTAppBase):
             1,#int(1), #dynamic offsets
             grouped_batch,
             self.name,
+            self.exclusivePlan,
         )
 
     def getBufSize(self, src):

@@ -243,7 +243,7 @@ class GPUApplication(object):
             try:
                 fft_app = self._fftApps[key]
             except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self)
+                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=0,exclusivePlan=1)
                 self._fftApps[key] = fft_app
             
             fft_app.fft(self._commandBuffer, buf._buffer, buf_FT._buffer)
@@ -264,7 +264,7 @@ class GPUApplication(object):
             try:
                 fft_app = self._fftApps[key]
             except (KeyError):
-                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self)
+                fft_app = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
                 self._fftApps[key] = fft_app
 
             fft_app.ifft(self._commandBuffer, buf_FT._buffer, buf._buffer)

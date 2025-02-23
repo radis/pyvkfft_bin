@@ -38,14 +38,13 @@ layout(std430, binding = 1) uniform iterData{
 
 } iter_d;
 
-//layout(std430, binding = 3) readonly buffer SSBO1 {
-layout(std430, binding = 3) buffer SSBO1 {
-   float_atomic_t S_kl_FT_d[];
+layout(std430, binding = 3) readonly buffer SSBO1 {
+   complex64_t S_kl_FT_d[];
 };
 
-// layout(std430, binding = 4) writeonly buffer SSBO2 {
-   // complex64_t spectrum_FT_d[];
-// };
+ layout(std430, binding = 4) buffer SSBO2 {
+   float_atomic_t spectrum_FT_d[];
+ };
 
 
 void main() {
@@ -56,27 +55,22 @@ void main() {
 	uint l = gl_WorkGroupID.y;
 
 	if (k >= init_d.Nf) return;
-	//if (l >= iter_d.Nw) return;
+	if (l >= iter_d.Nw) return;
 
 	float w_l = 0.0;
     float mul = 0.0;
     complex64_t res = complex64_t(0.0, 0.0);
-    float resR, resI;
-	
-	
+   
 	float x = k / (2.0 * init_d.Nf * init_d.dt);
 	
-	int sk = 2;
-	int sl = 2*init_d.Nf;
+	int sk = 1;
+	int sl = init_d.Nf;
 
     //for (int l=0; l < iter_d.Nw; l++){
 	w_l = (1.0 + iter_d.a) * init_d.w_min * exp(l*iter_d.dxw);
 	mul = exp(-pi * x * w_l) / init_d.dt;
-	resR = S_kl_FT_d[l*sl + k*sk] * mul;
-	resI = S_kl_FT_d[l*sl + k*sk + 1] * mul;
-    
-	//spectrum_FT_d[k] = res;
-	//S_kl_FT_d[k] = res;
-	atomicAddFloatX(S_kl_FT_d[2*k],   resR);
-	atomicAddFloatX(S_kl_FT_d[2*k+1], resI);
+	res = S_kl_FT_d[l*sl + k*sk] * mul;
+	
+	atomicAddFloatX(spectrum_FT_d[2*k],   res.x);
+	atomicAddFloatX(spectrum_FT_d[2*k+1], res.y);
 }

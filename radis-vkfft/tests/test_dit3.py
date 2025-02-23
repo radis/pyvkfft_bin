@@ -27,7 +27,7 @@ class workGroupSize_t(Structure):
         ("id", c_uint),
     ]
 
-workGroupSizeArray_t = workGroupSize_t * 8
+workGroupSizeArray_t = workGroupSize_t * 4
 
 
 class currentBatch_t(Structure):
@@ -147,7 +147,7 @@ def spectrum_dit(a):
     I_arr1 = np.zeros(Nt, dtype=np.float32)
     spectrum_FT = np.zeros(Nf, dtype=np.complex64)
     S_kl_FT = np.fft.rfft(S_kl)
-    for l in range(5):
+    for l in range(Nw):
         w_l = (1+a)*w_min*np.exp(l*dxw)
 
         #S_k_FT = np.fft.rfft(S_kl[l])
@@ -183,20 +183,13 @@ app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
 app.S_kl_d = GPUBuffer(Nw*Nf*8, binding=3)
-app.currentBatch_d = GPUBuffer(sizeof(currentBatch_t), usage='uniform')
+app.spectrum_d = GPUBuffer(Nf*8, binding=4)
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
 
 # initalize data:
 app.database_d.initStagingBuffer()
 app.database_d.copyToBuffer(database)
-
-app._currentBatchUBOOffset = 0
-app.currentBatch_d.initStagingBuffer()
-currentBatch_h = app.currentBatch_d.getHostStructPtr(currentBatch_t)
-currentBatch_h.Nfwd = 8
-currentBatch_h.Ninv = 1
-app.currentBatch_d.transferStagingBuffer('H2D')
 
 app.init_params_d.initStagingBuffer()
 init_params_h = app.init_params_d.getHostStructPtr(init_params_t)
@@ -219,17 +212,23 @@ indirect_h = app.indirect_d.getHostStructPtr(workGroupSizeArray_t)
 app._indirect_h = indirect_h
 
 app.S_kl_d.setFFTShape((Nw,Nt), np.float32)
-app.S_kl_d.initStagingBuffer(4*Nt)
+#app.S_kl_d.initStagingBuffer(4*Nt)
+
+app.spectrum_d.setFFTShape((Nt,), np.float32)
+app.spectrum_d.initStagingBuffer()
+
 
 app.command_list = [
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
     app.iter_params_d.cmdTransferStagingBuffer('H2D'),
     app.cmdClearBuffer(app.S_kl_d),
+    app.cmdClearBuffer(app.spectrum_d),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
     app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
-    app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
-    app.cmdIFFT(app.S_kl_d, app.S_kl_d, name='FFTb'), 
-    app.S_kl_d.cmdTransferStagingBuffer('D2H'),   
+    #app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
+    app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
+    app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFTb'), 
+    app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
 app.writeCommandBuffer()
 
@@ -240,28 +239,29 @@ for i, wg in enumerate(indirect_h):
     r2c = (wg.id & 2) >> 1
 
     if inverse:
-        wg.y = 1
-        wg.z = 1
+        pass
+        # wg.y = 1
+        # wg.z = 1
     else:
         update_dict[i] = 'y' if r2c else 'z'
 
     #print(wg.x, wg.y, wg.z, wg.id, inverse, r2c)
         
 
-for i in update_dict:
-    wg = indirect_h[i]
-    setattr(wg,update_dict[i],5)
+# for i in update_dict:
+#     wg = indirect_h[i]
+#     setattr(wg,update_dict[i], Nw)
 
 for i, wg in enumerate(indirect_h):
     inverse = wg.id & 1
     r2c = (wg.id & 2) >> 1
 
-    print(wg.x, wg.y, wg.z, wg.id,':', inverse, r2c)
+    print(f'({wg.x:3d}, {wg.y:3d}, {wg.z:3d}) : {inverse:1d}, {r2c:1d}')
    
 
 # iteration:
 app.run()
-app.S_kl_d.toArray(I_arr2)
+app.spectrum_d.toArray(I_arr2)
 
 #arr3 = np.zeros((Nw+1,2*Nf), dtype=np.float32)
 #app.S_kl_FT_d.toArray(arr3)
@@ -307,18 +307,17 @@ def update(val):
     #I_arr1 = spectrum_dit(a)
     t1 = perf_counter()
 
-    # if sNw.val != Nw_i:
-    #     #print('new val', sNw.val)
-    #     Nw_i = sNw.val
-    #     dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
-    #     #iter_params_h.Nw = Nw_i
-    #     iter_params_h.dxw = dxw_i
-    #     #app.S_kl_d.setFFTShape((Nw_i, Nt))
-    #     #app.S_kl_FT_d.setFFTShape((Nw_i+1, Nf))
-    #     #app.updateDescriptorSet(app._descriptorSets[0])
+    if sNw.val != Nw_i:
+        #print('new val', sNw.val)
+        Nw_i = sNw.val
+        dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
+        iter_params_h.Nw = Nw_i
+        iter_params_h.dxw = dxw_i
+        app.S_kl_d.setFFTShape((Nw_i, Nt))
+        app.updateDescriptorSet(app._descriptorSets[0])
 
-    #     #app.freeCommandBuffer()
-    #     #app.writeCommandBuffer()
+        #app.freeCommandBuffer()
+        #app.writeCommandBuffer()
         
 
     #indirect_h[1].z = Nw_i
@@ -329,7 +328,7 @@ def update(val):
 
     iter_params_h.a = a
     app.run()
-    app.S_kl_d.toArray(I_arr2)
+    app.spectrum_d.toArray(I_arr2)
     t2 = perf_counter()
 
     ax.set_title('CPU: {:.1f} ms - GPU: {:.1f} ms'.format((t1-t0)*1e3, (t2-t1)*1e3))

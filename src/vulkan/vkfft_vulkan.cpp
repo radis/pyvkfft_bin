@@ -69,7 +69,7 @@ LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, c
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
                                 const int, const int, const int, const int, const int, const int, const int, const int, 
-                                const long*, const char*);
+                                const long*, const char*, const int);
 
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
@@ -193,7 +193,7 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name)
+                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name, const int exclusive_plan)
 
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
@@ -203,8 +203,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   fname += "_debug.txt";
   myfile.open (fname);
   myfile << "Debug file.\n";
-  
-  
   
   config->FFTdim = fftdim;
   for(int i=0; i<VKFFT_MAX_FFT_DIMENSIONS; i++) config->size[i] = size[i];
@@ -216,32 +214,19 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->performR2C = r2c;
   config->performDCT = dct;
   
-  // config->dynamicBatch = dynamicBatch;
-  // config->currentBatchUBO = currentBatchUBO;
-  
-  
   config->indirectDispatch = indirectDispatch;
   config->indirectBuffer = indirectBuffer;
   config->indirectBufferOffset = indirectBufferOffset;
   config->indirectHostPointer = indirectHostPointer;
   
-  
-  
-  //config->currentBatchUBOSize = 32;
 
-  // switch (dynamicBatch){
-	// case 1: config->currentBatchUBOSize = 4;
-	// case 2: config->currentBatchUBOSize = 8;
-  // }
-  // config->currentBatchUBOOffset = currentBatchUBOOffset;
+  config->inverseReturnToInputBuffer = 1;
   
-  // if (strcmp(name,"FFT1")==0){
-	// config->makeForwardPlanOnly=1;
+  switch (exclusive_plan) {  
+	case  1: config->makeForwardPlanOnly = 1; break;
+    case -1: config->makeInversePlanOnly = 1; break;
+  }
 
-  // }
-  // else if (strcmp(name,"FFT2")==0) {
-  	// config->makeInversePlanOnly=1;
-  // }
 
   if (specifyOffset>=0)
     config->specifyOffsetsAtLaunch = specifyOffset;
@@ -303,34 +288,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   //uint64_t* psizein = psize;
   uint64_t* psizein = new uint64_t;
   
-  //int s =  size[0];
-  //for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++) s *= size[i];
- 
-  //config->isInputFormatted = 0;
-  //config->isOutputFormatted = 0;
-  config->inverseReturnToInputBuffer = 1;
-
-  // if(r2c)
-  // {
-    // *psize = (uint64_t)((s / 2 +1) * precision * (size_t)2);
-    // if(buffer_out != NULL)
-    // {
-      // psizein = new uint64_t;
-      // *psizein = (uint64_t)(s * precision);
-      // config->inverseReturnToInputBuffer = 1;
-	  // //config->inputBufferStride[0] = size[0];
-      // //for(int i=1; i<VKFFT_MAX_FFT_DIMENSIONS; i++)
-      // //  config->inputBufferStride[i] = size[i] * config->inputBufferStride[i-1];
-    // }
-  // }
-  // else
-  // {
-    // if(dct) *psize = (uint64_t)(s * precision);
-    // else *psize = (uint64_t)(s * precision * (size_t)2);
-  // }
-  
-  //DvdB: Now we remove the padding size from the fast FT dimension:
-  //if(r2c) config->size[0] -= 2;
   
 // Calculations are made in buffer, so with buffer != inputBuffer we keep the original data
   if(buffer_out != NULL)
@@ -401,6 +358,42 @@ VkFFTApplication* init_app(const VkFFTConfiguration* config, int *res)
   }
   return app;
 }
+
+
+// int update_buffers_fwd(VkFFTApplication* app, VkBuffer* buffer_in, VkBuffer* buffer_out, const int size_in, const int size_out)
+// {
+	// for (pfUINT i = 0; i < app->configuration.FFTdim; i++) {
+		// //app->configuration.sharedMemorySize = ((app->configuration.size[i] & (app->configuration.size[i] - 1)) == 0) ? app->configuration.sharedMemorySizePow2 : initSharedMemory;
+		// for (pfUINT j = 0; j < app->localFFTPlan->numAxisUploads[i]; j++) {
+			// VkFFTAxis* axis = &FFTPlan->axes[i][j];
+
+            // resFFT = VkFFTUpdateBufferSet(app, app->localFFTPlan, axis, i, j, 0);
+			// if (resFFT != VKFFT_SUCCESS) {
+				// deleteVkFFT(app);
+				// return resFFT;
+			// }
+		// }
+		// // not applicable if using small prime factors
+		// // if (app->useBluesteinFFT[i] && (app->localFFTPlan->numAxisUploads[i] > 1)) {
+			// // for (pfUINT j = 1; j < app->localFFTPlan->numAxisUploads[i]; j++) {
+				// // resFFT = VkFFTPlanAxis(app, app->localFFTPlan, i, j, 0, 1);
+				// // if (resFFT != VKFFT_SUCCESS) {
+					// // deleteVkFFT(app);
+					// // return resFFT;
+				// // }
+			// // }
+		// // }
+		// if ((app->localFFTPlan->bigSequenceEvenR2C) && (i == 0)) {
+			// VkFFTAxis* axis = &app->localFFTPlan->R2Cdecomposition;
+			// resFFT = VkFFTUpdateBufferSetR2CMultiUploadDecomposition(app, app->localFFTPlan, axis, 0, 0, 0);
+			// if (resFFT != VKFFT_SUCCESS) {
+				// deleteVkFFT(app);
+				// return resFFT;
+			// }
+		// }
+	// }
+
+// }
 
 int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out)
 {

@@ -69,7 +69,7 @@ LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, c
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
                                 const int, const int, const int, const int, const int, const int, const int, const int, 
-                                const long*, const char*);
+                                const long*, const char*, const int);
 
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
@@ -193,7 +193,7 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name)
+                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name, const int exclusive_plan)
 
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
@@ -221,6 +221,12 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   
 
   config->inverseReturnToInputBuffer = 1;
+  
+  switch (exclusive_plan) {  
+	case  1: config->makeForwardPlanOnly = 1; break;
+    case -1: config->makeInversePlanOnly = 1; break;
+  }
+
 
   if (specifyOffset>=0)
     config->specifyOffsetsAtLaunch = specifyOffset;
@@ -352,6 +358,42 @@ VkFFTApplication* init_app(const VkFFTConfiguration* config, int *res)
   }
   return app;
 }
+
+
+// int update_buffers_fwd(VkFFTApplication* app, VkBuffer* buffer_in, VkBuffer* buffer_out, const int size_in, const int size_out)
+// {
+	// for (pfUINT i = 0; i < app->configuration.FFTdim; i++) {
+		// //app->configuration.sharedMemorySize = ((app->configuration.size[i] & (app->configuration.size[i] - 1)) == 0) ? app->configuration.sharedMemorySizePow2 : initSharedMemory;
+		// for (pfUINT j = 0; j < app->localFFTPlan->numAxisUploads[i]; j++) {
+			// VkFFTAxis* axis = &FFTPlan->axes[i][j];
+
+            // resFFT = VkFFTUpdateBufferSet(app, app->localFFTPlan, axis, i, j, 0);
+			// if (resFFT != VKFFT_SUCCESS) {
+				// deleteVkFFT(app);
+				// return resFFT;
+			// }
+		// }
+		// // not applicable if using small prime factors
+		// // if (app->useBluesteinFFT[i] && (app->localFFTPlan->numAxisUploads[i] > 1)) {
+			// // for (pfUINT j = 1; j < app->localFFTPlan->numAxisUploads[i]; j++) {
+				// // resFFT = VkFFTPlanAxis(app, app->localFFTPlan, i, j, 0, 1);
+				// // if (resFFT != VKFFT_SUCCESS) {
+					// // deleteVkFFT(app);
+					// // return resFFT;
+				// // }
+			// // }
+		// // }
+		// if ((app->localFFTPlan->bigSequenceEvenR2C) && (i == 0)) {
+			// VkFFTAxis* axis = &app->localFFTPlan->R2Cdecomposition;
+			// resFFT = VkFFTUpdateBufferSetR2CMultiUploadDecomposition(app, app->localFFTPlan, axis, 0, 0, 0);
+			// if (resFFT != VKFFT_SUCCESS) {
+				// deleteVkFFT(app);
+				// return resFFT;
+			// }
+		// }
+	// }
+
+// }
 
 int fft(VkFFTApplication* app, VkCommandBuffer* cmd_buffer, VkBuffer* in, VkBuffer* out)
 {

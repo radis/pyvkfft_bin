@@ -23,14 +23,13 @@ layout(std430, binding = 1) uniform iterData{
 
 } iter_d;
 
-//layout(std430, binding = 3) readonly buffer SSBO1 {
-layout(std430, binding = 3) buffer SSBO1 {
+layout(std430, binding = 3) readonly buffer SSBO1 {
    complex64_t S_kl_FT_d[];
 };
 
-// layout(std430, binding = 4) writeonly buffer SSBO2 {
-   // complex64_t spectrum_FT_d[];
-// };
+layout(std430, binding = 4) writeonly buffer SSBO2 {
+   complex64_t spectrum_FT_d[];
+};
 
 
 void main() {
@@ -54,6 +53,5 @@ void main() {
 		mul = exp(-pi * x * w_l) / init_d.dt;
 		res += S_kl_FT_d[l*sl + k*sk] * mul;
     }
-	//spectrum_FT_d[k] = res;
-	S_kl_FT_d[k] = res;
+	spectrum_FT_d[k] = res;
 }

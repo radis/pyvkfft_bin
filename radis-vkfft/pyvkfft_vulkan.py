@@ -403,7 +403,7 @@ class VkFFTApp(VkFFTAppBase):
         self.bufInSize = 8 * (shape[0]//2+1) * n_batch
         self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
         
-        dynamicBatch = 1 if self.exclusivePlan == 1 else 0
+        indirectDispatch = 1 if self.exclusivePlan == 1 else 0
 
         # override batch number
         #n_batch = 1 if len(self.shape) == 1 else 6#self.shape[-2]
@@ -448,7 +448,7 @@ class VkFFTApp(VkFFTAppBase):
             #self.currentBatchUBO,
             #self.currentBatchUBOOffset,
             # ctypes.c_void_p(0), ctypes.c_void_p(0),
-            dynamicBatch,
+            indirectDispatch,
             self.indirectBuffer,
             self.indirectOffset,
             ctypes.byref(self.indirectHost),
@@ -466,8 +466,8 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoost),
             int(self.use_lut),
             int(self.keepShaderCode),
-            #min(4,n_batch),
-            n_batch,
+            min(6,n_batch),
+            #n_batch,
             skip,
             int(self.coalescedMemory),
             int(self.numSharedBanks),
@@ -476,7 +476,7 @@ class VkFFTApp(VkFFTAppBase):
             int(self.registerBoostNonPow2),
             int(self.registerBoost4Step),
             int(self.warpSize),
-            1,#int(1), #dynamic offsets
+            0,#1,#int(1), #specify offset at launch
             grouped_batch,
             self.name,
             self.exclusivePlan,

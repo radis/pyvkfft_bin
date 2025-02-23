@@ -304,9 +304,7 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
        //<< "inputBufferSize: "<< config->inputBufferSize[0] << " , outputBufferSize: " << config->bufferSize[0] <<endl
 	   << "bufferSize: "<< config->bufferSize[0] <<endl;
 	   //<< "uboSize: "<<config->currentBatchUBOSize<<" , uboOffset: " << config->currentBatchUBOOffset <<endl;
-	   
-	   
-  
+	  
   myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
   
   myfile << "\n End of debug file.\n";

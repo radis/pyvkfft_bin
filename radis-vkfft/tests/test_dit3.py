@@ -238,11 +238,7 @@ for i, wg in enumerate(indirect_h):
     inverse = wg.id & 1
     r2c = (wg.id & 2) >> 1
 
-    if inverse:
-        pass
-        # wg.y = 1
-        # wg.z = 1
-    else:
+    if not inverse:
         update_dict[i] = 'y' if r2c else 'z'
 
     #print(wg.x, wg.y, wg.z, wg.id, inverse, r2c)
@@ -255,7 +251,6 @@ for i, wg in enumerate(indirect_h):
 for i, wg in enumerate(indirect_h):
     inverse = wg.id & 1
     r2c = (wg.id & 2) >> 1
-
     print(f'({wg.x:3d}, {wg.y:3d}, {wg.z:3d}) : {inverse:1d}, {r2c:1d}')
    
 

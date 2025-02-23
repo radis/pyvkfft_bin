@@ -1,12 +1,6 @@
 #version 450
 
 layout (local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
-layout(push_constant) uniform PushConsts
-{
-	uint inputOffset;
-	uint outputOffset;
-} consts;
-
 layout(std430, binding = 0) buffer DataIn{
 	vec2 inputs[];
 };
@@ -55,7 +49,7 @@ tempInt = shiftX / 125024;
 tempInt = gl_GlobalInvocationID.z / 1;
 tempInt = tempInt * 250048;
 shiftZ = shiftZ + tempInt;
-shiftZ = shiftZ + consts.inputOffset;
+shiftZ = shiftZ + 0;
 if (shiftX < 125024) {
 inoutID = inoutID_x + shiftZ;
 temp_0 = inputs[inoutID];

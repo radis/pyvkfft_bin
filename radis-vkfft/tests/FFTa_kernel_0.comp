@@ -1,12 +1,6 @@
 #version 450
 
 layout (local_size_x = 9, local_size_y = 32, local_size_z = 1) in;
-layout(push_constant) uniform PushConsts
-{
-	uint inputOffset;
-	uint outputOffset;
-} consts;
-
 layout(std430, binding = 0) buffer DataIn{
 	vec2 inputs[];
 };
@@ -100,7 +94,7 @@ angle = 0.0f;
 shiftX = gl_WorkGroupID.x;
 shiftY = gl_WorkGroupID.y;
 shiftZ = shiftY * 250048;
-shiftZ = shiftZ + consts.inputOffset;
+shiftZ = shiftZ + 0;
 tempInt = shiftX % 63;
 tempInt2 = tempInt * 63;
 tempInt = shiftX / 63;
@@ -736,8 +730,6 @@ sdata[sdataID] = temp_8;
 }
 barrier();
 
-shiftZ = shiftY * 250048;
-shiftZ = shiftZ + consts.outputOffset;
 tempInt2 = 9 * gl_LocalInvocationID.y;
 tempInt2 = tempInt2 + gl_LocalInvocationID.x;
 tempInt2 = tempInt2 % 32;

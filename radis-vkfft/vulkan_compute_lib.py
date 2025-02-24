@@ -1044,21 +1044,24 @@ class GPUBuffer:
             self._usage = vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             self._descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER    
         
-        # if fftSize is not None:
-        #     self._fftSize = fftSize
-        #     self._batchSize = 1
-        #     self._dtype = np.dtype(np.float32 if dtype is None else dtype)
-        #     self._itemsize = self._dtype.itemsize
-        #     self._bufferSize = (self._fftSize // 2 + 1) * 2 * self._itemsize
-        # else:
-        #     self._bufferSize = bufferSize
-        self._bufferSize = bufferSize
+        if fftSize is not None:
+            fftSize = np.atleast_1d(fftSize)
+            self._batchSize = 1 if len(fftSize) == 1 else fftSize[-2]
+            self._fftSize = fftSize[-1]
+            #self._batchSize = 1
+            self._dtype = np.dtype(np.float32 if dtype is None else dtype)
+            self._itemsize = self._dtype.itemsize
+            self._bufferSize = self._batchSize * (self._fftSize // 2 + 1) * 2 * self._itemsize
+            self._shape = (self._batchSize, self._fftSize)
+        else:
+            self._bufferSize = bufferSize
+        # self._bufferSize = bufferSize
               
         self._dstBinding = binding
 
         self._isInitialized = False
         self._stagingBufferInitialized = False
-        self._delayedSetDataList = []
+        #self._delayedSetDataList = []
         
         self.name = ''
         #self.shape = None
@@ -1234,11 +1237,12 @@ class GPUBuffer:
         self._dtype = np.dtype(np.float32)
         self._itemsize = self._dtype.itemsize
 
-    def setBatchSize(self, batch, grow_only=True, factor=1.0):
+    def setBatchSize(self, batch, grow_only=True, factor=1.5):
         if batch > self._batchSize:
             self._batchSize = int(factor * batch)
             new_size = self._batchSize * (self._fftSize // 2 + 1) * 2 * self._itemsize
             self.resize_buffer(new_size)
+            print('batch:', batch)
                     
     
     def resize_buffer(self, nbytes):

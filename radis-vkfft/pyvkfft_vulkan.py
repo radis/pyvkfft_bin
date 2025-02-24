@@ -71,7 +71,7 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
     else:
         inplace = False
     return VkFFTApp(
-        arr_in._shape,#(arr_in._batchSize, arr_in._fftSize),
+        (arr_in._batchSize, arr_in._fftSize),
         arr_in._dtype,
         buffer_size=arr_in._bufferSize,
         buffer_src=arr_in._buffer,

@@ -325,8 +325,6 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 VkFFTApplication* init_app(const VkFFTConfiguration* config, int *res)
 {
     
-  //cout << "Hello everyone! Please get yourself comfortable while the Config is being made!\n";
-
   VkFFTApplication* app = new VkFFTApplication({});
   *res = initializeVkFFT(app, *config);
   /*

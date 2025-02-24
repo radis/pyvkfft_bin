@@ -109,7 +109,7 @@ class GPUApplication(object):
             val.app = self
             val.name = name
             val.init_buffer()
-            val._delayedSetData()
+            #val._delayedSetData()
         self.__dict__[name] = val
 
     def init_shaders(self):
@@ -1044,15 +1044,16 @@ class GPUBuffer:
             self._usage = vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             self._descriptorType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER    
         
-        if fftSize is not None:
-            self._fftSize = fftSize
-            self._batchSize = 1
-            self._dtype = np.dtype(np.float32 if dtype is None else dtype)
-            self._itemsize = self._dtype.itemsize
-            self._bufferSize = (self._fftSize // 2 + 1) * 2 * self._itemsize
-        else:
-            self._bufferSize = bufferSize
-            
+        # if fftSize is not None:
+        #     self._fftSize = fftSize
+        #     self._batchSize = 1
+        #     self._dtype = np.dtype(np.float32 if dtype is None else dtype)
+        #     self._itemsize = self._dtype.itemsize
+        #     self._bufferSize = (self._fftSize // 2 + 1) * 2 * self._itemsize
+        # else:
+        #     self._bufferSize = bufferSize
+        self._bufferSize = bufferSize
+              
         self._dstBinding = binding
 
         self._isInitialized = False
@@ -1227,6 +1228,11 @@ class GPUBuffer:
     def cmdClearBuffer(self, timestamp=False):
         return self.app.cmdClearBuffer(self, timestamp=timestamp)
 
+
+    def setFFTShape(self, shape):
+        self._shape = shape
+        self._dtype = np.dtype(np.float32)
+        self._itemsize = self._dtype.itemsize
 
     def setBatchSize(self, batch, grow_only=True, factor=1.0):
         if batch > self._batchSize:

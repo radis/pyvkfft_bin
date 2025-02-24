@@ -71,7 +71,7 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
     else:
         inplace = False
     return VkFFTApp(
-        (arr_in._batchSize, arr_in._fftSize),
+        arr_in._shape,#(arr_in._batchSize, arr_in._fftSize),
         arr_in._dtype,
         buffer_size=arr_in._bufferSize,
         buffer_src=arr_in._buffer,
@@ -397,7 +397,7 @@ class VkFFTApp(VkFFTAppBase):
         shape[0] = self.shape[-1]
         # skip[1 : len(self.shape)] = 1
         FFTdim = 1
-        n_batch = self.shape[-2]
+        n_batch = 1 if len(self.shape) == 1 else self.shape[-2]
 
         grouped_batch = np.empty(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
         grouped_batch.fill(-1)

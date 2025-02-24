@@ -1048,11 +1048,10 @@ class GPUBuffer:
             fftSize = np.atleast_1d(fftSize)
             self._batchSize = 1 if len(fftSize) == 1 else fftSize[-2]
             self._fftSize = fftSize[-1]
-            #self._batchSize = 1
             self._dtype = np.dtype(np.float32 if dtype is None else dtype)
             self._itemsize = self._dtype.itemsize
             self._bufferSize = self._batchSize * (self._fftSize // 2 + 1) * 2 * self._itemsize
-            self._shape = (self._batchSize, self._fftSize)
+            #self._shape = (self._batchSize, self._fftSize)
         else:
             self._bufferSize = bufferSize
         # self._bufferSize = bufferSize
@@ -1232,10 +1231,10 @@ class GPUBuffer:
         return self.app.cmdClearBuffer(self, timestamp=timestamp)
 
 
-    def setFFTShape(self, shape):
-        self._shape = shape
-        self._dtype = np.dtype(np.float32)
-        self._itemsize = self._dtype.itemsize
+    # def setFFTShape(self, shape):
+    #     self._shape = shape
+    #     self._dtype = np.dtype(np.float32)
+    #     self._itemsize = self._dtype.itemsize
 
     def setBatchSize(self, batch, grow_only=True, factor=1.5):
         if batch > self._batchSize:

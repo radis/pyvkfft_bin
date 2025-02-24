@@ -174,9 +174,8 @@ I_arr2 = np.zeros(Nt, dtype=np.float32)
 app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
-app.S_kl_d = GPUBuffer(fftSize=(Nw,Nt), binding=3)
+app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
 app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
-
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
 
@@ -204,11 +203,6 @@ app.indirect_d.initStagingBuffer()
 indirect_h = app.indirect_d.getHostStructPtr(workGroupSizeArray_t)
 app._indirect_h = indirect_h
 
-
-
-# app.S_kl_d.setFFTShape((Nw,Nt))
-# app.S_kl_d.setBatchSize(Nw)
-# app.spectrum_d.setFFTShape((1,Nt))
 app.spectrum_d.initStagingBuffer()
 
 app.command_list = [
@@ -223,7 +217,12 @@ app.command_list = [
     app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFTb'), 
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
+
+
+
+
 app.writeCommandBuffer()
+
 
 
 update_dict = {}
@@ -248,6 +247,8 @@ for i, wg in enumerate(indirect_h):
    
 
 # iteration:
+app.S_kl_d.setBatchSize(Nw) #TODO:Must be done after writeCommandBuffer... But why??
+
 app.run()
 app.spectrum_d.toArray(I_arr2)
 

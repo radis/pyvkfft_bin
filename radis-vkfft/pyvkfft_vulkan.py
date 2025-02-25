@@ -71,11 +71,7 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
     else:
         inplace = False
     return VkFFTApp(
-        (arr_in._batchSize, arr_in._fftSize),
-        arr_in._dtype,
-        buffer_size=arr_in._bufferSize,
-        buffer_src=arr_in._buffer,
-        buffer_dst=arr_out._buffer,
+        buffer=arr_in,
         #currentBatchUBO=compute_app.currentBatch_d._buffer,
         #currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
         indirectOffset=indirectOffset,
@@ -201,11 +197,13 @@ class VkFFTApp(VkFFTAppBase):
 
     def __init__(
         self,
-        shape_in,
-        dtype: type,
-        buffer_size,
-        buffer_src,
-        buffer_dst,
+        buffer,
+        # shape_in,
+        # dtype: type,
+        # buffer_size,
+        # buffer_src,
+        # buffer_dst,
+        
         #currentBatchUBO,
         #currentBatchUBOOffset,
         indirectOffset,
@@ -305,6 +303,10 @@ class VkFFTApp(VkFFTAppBase):
         #     kwargs = tune_vkfft(tune_config, shape=shape, dtype=dtype, ndim=ndim, inplace=inplace, stream=stream,
         #                         norm=norm, r2c=r2c, dct=dct, axes=axes, strides=strides, verbose=False,
         #                         **kwargs)[0]
+        
+        
+        shape_in = (buffer._fftSize,) if buffer._batchSize == 1 else (buffer._batchSize, buffer._fftSize)
+        dtype = buffer._dtype
         super().__init__(
             shape_in,
             dtype,
@@ -318,9 +320,21 @@ class VkFFTApp(VkFFTAppBase):
             **kwargs,
         )
 
-        self.bufferSize = buffer_size
-        self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer_src))
-        self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer_dst))
+
+
+
+
+        
+        # (arr_in._batchSize, arr_in._fftSize),
+        # arr_in._dtype,
+        # buffer_size=arr_in._bufferSize,
+        # buffer_src=arr_in._buffer,
+        # buffer_dst=arr_out._buffer,
+
+
+        self.bufferSize = buffer._bufferSize
+        self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer._buffer))
+        self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer._buffer))
         #self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
         #self.currentBatchUBOOffset = currentBatchUBOOffset
         self.indirectOffset = indirectOffset

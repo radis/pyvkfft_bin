@@ -301,8 +301,8 @@ def update(val):
         dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
         iter_params_h.Nw = Nw_i
         iter_params_h.dxw = dxw_i
-        app.S_kl_d.setBatchSize(Nw_i)
         
+        app.S_kl_d.setBatchSize(Nw_i)
         for i in update_dict:
             wg = indirect_h[i]
             setattr(wg,update_dict[i], Nw_i)

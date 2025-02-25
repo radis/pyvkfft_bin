@@ -646,15 +646,14 @@ class GPUApplication(object):
                     range=bufferObject._bufferSize,
                 ),
             )
-            for bufferObject in self._bufferObjects
+            for bufferObject in self._bufferObjects if bufferObject._descriptorType is not None
         ]
-
 
         # perform the update of the descriptor set.
         vk.vkUpdateDescriptorSets(
             self._device, len(writeDescriptorSets), writeDescriptorSets, 0, None
         )
-        
+
 
     def createComputePipeline(
         self, shaderFileName, localWorkGroup, descriptorSetLayout

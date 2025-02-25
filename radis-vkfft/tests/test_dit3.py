@@ -169,8 +169,6 @@ app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
 I_arr2 = np.zeros(Nt, dtype=np.float32)
 
-
-
 app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
 app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
@@ -178,12 +176,9 @@ app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
 app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
-
 # initalize data:
-app.database_d.initStagingBuffer()
 app.database_d.copyToBuffer(database)
 
-app.init_params_d.initStagingBuffer()
 init_params_h = app.init_params_d.getHostStructPtr(init_params_t)
 init_params_h.Nl = Nl
 init_params_h.Nt = Nt
@@ -193,17 +188,13 @@ init_params_h.dt    = dt
 init_params_h.w_min = w_min
 app.init_params_d.transferStagingBuffer('H2D')
 
-app.iter_params_d.initStagingBuffer()
 iter_params_h = app.iter_params_d.getHostStructPtr(iter_params_t)
 iter_params_h.a = 0.0
 iter_params_h.Nw = Nw
 iter_params_h.dxw = dxw
 
-app.indirect_d.initStagingBuffer()
-indirect_h = app.indirect_d.getHostStructPtr(workGroupSizeArray_t)
-app._indirect_h = indirect_h
+indirect_h = app.setIndirectBuffer(app.indirect_d, workGroupSizeArray_t)
 
-app.spectrum_d.initStagingBuffer()
 
 app.command_list = [
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
@@ -211,15 +202,12 @@ app.command_list = [
     app.S_kl_d.cmdClearBuffer(),
     app.spectrum_d.cmdClearBuffer(),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
-    app.cmdFFT(app.S_kl_d, app.S_kl_d, name='FFTa'),
+    app.cmdFFT(app.S_kl_d, name='FFTa'),
     app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
     #app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
-    app.cmdIFFT(app.spectrum_d, app.spectrum_d, name='FFTb'), 
+    app.cmdIFFT(app.spectrum_d, name='FFTb'), 
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
-
-
-
 
 app.writeCommandBuffer()
 
@@ -248,33 +236,15 @@ for i, wg in enumerate(indirect_h):
 
 # iteration:
 app.S_kl_d.setBatchSize(Nw) #TODO:Must be done after writeCommandBuffer... But why??
-
 app.run()
 app.spectrum_d.toArray(I_arr2)
-
-#arr3 = np.zeros((Nw+1,2*Nf), dtype=np.float32)
-#app.S_kl_FT_d.toArray(arr3)
-#print(arr3[0,:6])
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(left=0.25, bottom=0.25)
 
 
-# plt.plot(arr3.T)
-# plt.xlim(0,100)
-
-
-
-#S_kl_FT2 = np.zeros_like(S_kl_FT)
-#app.S_kl_FT_d.copyFromBuffer(S_kl_FT2)
-
 
 #%%
-
-#ax.plot(t_arr, I_arr0)
-
-#p1 = ax.plot(f_arr, S_kl_FT.T.real)
-#p2 = ax.plot(f_arr, S_kl_FT2.T.real, 'k--')
 p1, = ax.plot(t_arr, I_arr1)
 p2, = ax.plot(t_arr, I_arr2, 'k--')
 
@@ -287,10 +257,8 @@ sw = Slider(axw, "a", -1.0, 2.0, valinit=0.0)
 Nw_i = Nw
 def update(val):
     global Nw_i
-    
 
     a = sw.val
-    #Nw_i = sNw.val
 
     t0 = perf_counter()
     #I_arr1 = spectrum_dit(a)
@@ -323,6 +291,3 @@ sw.on_changed(update)
 sNw.on_changed(update)
 
 plt.show()
-
-
-

@@ -61,19 +61,10 @@ _vkfft_vulkan = ctypes.cdll.LoadLibrary(vkfft_path)
 ##silent = os.open(os.devnull, os.O_WRONLY)
 
 
-def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None, tune=False, indirectOffset=0, exclusivePlan=0):
+def prepare_fft(buffer, name="", norm=1, compute_app=None, indirectOffset=0, exclusivePlan=0):
 
-    tune_config = {"backend": "pycuda"} if tune else None
-
-    if arr_out is None:
-        arr_out = arr_in
-        inplace = True
-    else:
-        inplace = False
     return VkFFTApp(
-        buffer=arr_in,
-        #currentBatchUBO=compute_app.currentBatch_d._buffer,
-        #currentBatchUBOOffset=compute_app._currentBatchUBOOffset,
+        buffer=buffer,
         indirectOffset=indirectOffset,
         indirectBuffer=compute_app.indirect_d._buffer,
         indirectHost=compute_app._indirect_h,
@@ -82,12 +73,11 @@ def prepare_fft(arr_in, arr_out=None, name="", ndim=1, norm=1, compute_app=None,
         queue=compute_app._queue,
         command_pool=compute_app._commandPool,
         fence=compute_app._fence,
-        ndim=ndim,
-        inplace=inplace,
+        ndim=1,
+        inplace=True,
         norm=norm,
         r2c=True,
-        #strides=arr_in.strides,
-        tune_config=tune_config,
+        tune_config=None,
         name=name,
         exclusivePlan=exclusivePlan,
     )
@@ -227,83 +217,6 @@ class VkFFTApp(VkFFTAppBase):
         **kwargs,
     ):
 
-        """
-
-        :param shape: the shape of the array to be transformed. The number
-            of dimensions of the array can be larger than the FFT dimensions,
-            but only for 1D and 2D transforms. 3D FFT transforms can only
-            be done on 3D arrays.
-        :param dtype: the numpy dtype of the source array (can be complex64 or complex128)
-        :param ndim: the number of dimensions to use for the FFT. By default,
-            uses the array dimensions. Can be smaller, e.g. ndim=2 for a 3D
-            array to perform a batched 3D FFT on all the layers. The FFT
-            is always performed along the last axes if the array's number
-            of dimension is larger than ndim, i.e. on the x-axis for ndim=1,
-            on the x and y axes for ndim=2.
-        :param inplace: if True (the default), performs an inplace transform and
-            the destination array should not be given in fft() and ifft().
-
-        ~~~~~
-        :param stream: the pycuda.driver.Stream or cupy.cuda.Stream to use
-            for the transform. This can also be the pointer/handle (int) to the
-            cuda stream object. If None, the default stream will be used.
-        ~~~~~
-
-        :param norm: if 0 (unnormalised), every transform multiplies the L2
-            norm of the array by its size (or the size of the transformed
-            array if ndim<d.ndim).
-            if 1 (the default) or "backward", the inverse transform divides
-            the L2 norm by the array size, so FFT+iFFT will keep the array norm.
-            if "ortho", each transform will keep the L2 norm, but that will
-            involve an extra read & write operation.
-        :param r2c: if True, will perform a real->complex transform, where the
-            complex destination is a half-hermitian array.
-            For an inplace transform, if the input data shape is (...,nx), the input
-            float array should have a shape of (..., nx+2), the last two columns
-            being ignored in the input data, and the resulting
-            complex array (using pycuda's GPUArray.view(dtype=np.complex64) to
-            reinterpret the type) will have a shape (..., nx//2 + 1).
-            For an out-of-place transform, if the input (real) shape is (..., nx),
-            the output (complex) shape should be (..., nx//2+1).
-            Note that for C2R transforms with ndim>=2, the source (complex) array
-            is modified.
-        :param dct: used to perform a Direct Cosine Transform (DCT) aka a R2R transform.
-            An integer can be given to specify the type of DCT (1, 2, 3 or 4).
-            if dct=True, the DCT type 2 will be performed, following scipy's convention.
-        :param axes: a list or tuple of axes along which the transform should be made.
-            if None, the transform is done along the ndim fastest axes, or all
-            axes if ndim is None. Not allowed for R2C transforms
-        :param strides: the array strides - needed if not C-ordered.
-        :param tune_config: this can be used to automatically generate an
-            optimised set of VkFFT parameters by testing various configurations
-            and measuring the FFT speed, in a manner similar to fftw's FFTW_MEASURE.
-            This should be a dictionary including the backend used and the parameter
-            values which will be tested.
-            This is EXPERIMENTAL, as wrong parameters may lead to crashes.
-            Note that this will allocate temporary GPU arrays, unless the arrays
-            to used have been passed as parameters ('dest' and 'src').
-            Examples:
-            tune={'backend':'cupy} - minimal example, will automatically test a small
-            set of parameters (4 to 10 tests). Recommended !
-            tune={'backend':'cupy, 'warpSize':[8,16,32,64,128]}: this will test
-            5 possible values for the warpSize.
-            tune={'backend':'cupy, 'groupedBatch':[[-1,-1,-1],[8,8,8], [4,16,16}:
-            this will test 3 possible values for groupedBatch. This one is more
-            tricky to use.
-            tune={'backend':'cupy, 'warpSize':[8,16,32,64,128], 'src':a}: this
-            will test 5 possible values for the warpSize, with a given source GPU
-            array. This would only be valid for an inplace transform as no
-            destination array is given.
-
-        :raises RuntimeError: if the initialisation fails, e.g. if the CUDA
-            driver has not been properly initialised, or if the transform dimensions
-            are not allowed by VkFFT.
-        """
-        # if tune_config is not None:
-        #     kwargs = tune_vkfft(tune_config, shape=shape, dtype=dtype, ndim=ndim, inplace=inplace, stream=stream,
-        #                         norm=norm, r2c=r2c, dct=dct, axes=axes, strides=strides, verbose=False,
-        #                         **kwargs)[0]
-        
         
         shape_in = (buffer._fftSize,) if buffer._batchSize == 1 else (buffer._batchSize, buffer._fftSize)
         dtype = buffer._dtype
@@ -316,27 +229,12 @@ class VkFFTApp(VkFFTAppBase):
             r2c=r2c,
             dct=dct,
             axes=axes,
-            #strides=strides,
             **kwargs,
         )
-
-
-
-
-
-        
-        # (arr_in._batchSize, arr_in._fftSize),
-        # arr_in._dtype,
-        # buffer_size=arr_in._bufferSize,
-        # buffer_src=arr_in._buffer,
-        # buffer_dst=arr_out._buffer,
-
 
         self.bufferSize = buffer._bufferSize
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer._buffer))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer._buffer))
-        #self.currentBatchUBO = _types.VkBuffer(getVulkanPtr(currentBatchUBO))
-        #self.currentBatchUBOOffset = currentBatchUBOOffset
         self.indirectOffset = indirectOffset
         self.indirectBuffer = _types.VkBuffer(getVulkanPtr(indirectBuffer))
         self.indirectHost = indirectHost
@@ -359,8 +257,6 @@ class VkFFTApp(VkFFTAppBase):
 
         self.app = _vkfft_vulkan.init_app(self.config, ctypes.byref(res))
 
-        #!!!
-        # check_vkfft_result(res, shape, dtype, ndim, inplace, norm, r2c, dct, axes, "cuda")
         if self.app is None:
             raise RuntimeError(
                 "Error {:d}  creating VkFFTApplication. Was the Vulkan driver initialised ?".format(
@@ -397,16 +293,7 @@ class VkFFTApp(VkFFTAppBase):
             )
 
         shape = np.ones(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
-        # shape[:len(self.shape)] = self.shape
-
         skip = np.zeros(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
-        # skip[:len(self.skip_axis)] = self.skip_axis
-
-        # shape[: len(self.shape)] = self.shape[::-1]
-        # skip[1 : len(self.shape)] = 1
-        # FFTdim = len(self.shape)
-        # n_batch = 1
-
 
         shape[0] = self.shape[-1]
         # skip[1 : len(self.shape)] = 1
@@ -417,45 +304,12 @@ class VkFFTApp(VkFFTAppBase):
         grouped_batch.fill(-1)
         grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
 
-        # self.bufInSize = 8 * (shape[0]//2+1) * n_batch
-        # self.bufOutSize = 8 * (shape[0]//2+1) * n_batch 
-        
         indirectDispatch = 1 if self.exclusivePlan == 1 else 0
-
-        # override batch number
-        #n_batch = 1 if len(self.shape) == 1 else 6#self.shape[-2]
-
-
-        # if self.r2c and self.inplace:
-        #     # the last two columns are ignored in the R array, and will be used
-        #     # in the C array with a size nx//2+1
-        #     shape[0] -= 2
-        #     print('-2!!!!')
-
-        # s = 0
-        # if self.stream is not None:
-        # # if isinstance(self.stream, cp.cuda.Stream):
-        # # s = self.stream.ptr
-        # if s == 0 and isinstance(self.stream, int):
-        # # Assume the ptr or handle was passed
-        # s = self.stream
 
         if self.norm == "ortho":
             norm = 0
         else:
             norm = self.norm
-
-        # We pass fake buffer pointer addresses to VkFFT. The real ones will be
-        # given when performing the actual FFT.
-        # dest_gpudata = 2
-        # if self.inplace:
-        # dest_gpudata = 0
-
-        # print('physicalDevice:', '0x'+hex(self.compute_app.getVulkanPtr('_physicalDevice'))[2:].upper())
-        # ptr = ctypes.c_void_p(self.compute_app.getVulkanPtr('_physicalDevice'))
-        # _vkfft_vulkan.get_dev_props(ctypes.byref(ptr), buf)
-        
-        print(shape, n_batch)
         
         return _vkfft_vulkan.make_config(
             shape,
@@ -464,10 +318,6 @@ class VkFFTApp(VkFFTAppBase):
             FFTdim,
             self.bufferSrc,
             self.bufferDest,
-            #0, #dynamicBatch
-            #self.currentBatchUBO,
-            #self.currentBatchUBOOffset,
-            # ctypes.c_void_p(0), ctypes.c_void_p(0),
             indirectDispatch,
             self.indirectBuffer,
             self.indirectOffset,
@@ -510,7 +360,7 @@ class VkFFTApp(VkFFTAppBase):
     # def sync(self):
     # res = _vkfft_vulkan.sync_app(self.app)
 
-    def fft(self, cmd_buf, src, dest=None, offset_in=0, offset_out=0):
+    def fft(self, cmd_buf, src):
         """
         Compute the forward FFT
 
@@ -521,23 +371,17 @@ class VkFFTApp(VkFFTAppBase):
             array is returned.
         """
 
-        if dest is None:
-            assert self.inplace
-            dest = src
-
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(src))
-        self.bufferDest = _types.VkBuffer(getVulkanPtr(dest))
         self.commandBufferFwd = _types.VkCommandBuffer(getVulkanPtr(cmd_buf))
 
-        _vkfft_vulkan.ffto(
+        _vkfft_vulkan.fft(
             self.app,
             ctypes.byref(self.commandBufferFwd),
             ctypes.byref(self.bufferSrc),
-            ctypes.byref(self.bufferDest),
-            offset_in, offset_out,
+            None
         )
 
-    def ifft(self, cmd_buf, src, dest=None, offset_in=0, offset_out=0):
+    def ifft(self, cmd_buf, src):
         """
         Compute the backward FFT
 
@@ -547,20 +391,16 @@ class VkFFTApp(VkFFTAppBase):
         :return: the transformed array. For a C2R inplace transform, the float view of the
             array is returned.
         """
-        if dest is None:
-            assert self.inplace
-            dest = src
+        
 
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(src))
-        self.bufferDest = _types.VkBuffer(getVulkanPtr(dest))
         self.commandBufferRev = _types.VkCommandBuffer(getVulkanPtr(cmd_buf))
 
-        _vkfft_vulkan.iffto(
+        _vkfft_vulkan.ifft(
             self.app,
             ctypes.byref(self.commandBufferRev),
-            ctypes.byref(self.bufferDest),
+            None,
             ctypes.byref(self.bufferSrc),
-            offset_in, offset_out,
         )
 
 

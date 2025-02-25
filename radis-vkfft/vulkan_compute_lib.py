@@ -68,6 +68,9 @@ class GPUApplication(object):
         self.createDevice()
         self.init_shaders()
         
+        self.createCommandBuffer()
+
+        
 
     def free(self):
 
@@ -237,12 +240,12 @@ class GPUApplication(object):
 
 
 
-    def cmdFFT(self, buf, buf_FT, name="", timestamp=False):
-        def func(self, buf, buf_FT, name="", timestamp=False):
+    def cmdFFT(self, buf, name="", timestamp=False):
+        def func(self, buf, name="", timestamp=False):
             
             if self._fftAppFwd is None:
-                self._fftAppFwd = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=0, exclusivePlan=1)
-            self._fftAppFwd.fft(self._commandBuffer, buf._buffer, buf_FT._buffer)
+                self._fftAppFwd = prepare_fft(buf, name=name, compute_app=self, indirectOffset=0, exclusivePlan=1)
+            self._fftAppFwd.fft(self._commandBuffer, buf._buffer)
 
             if timestamp == True:
                 self.cmdAddTimestamp("fft").writeCommand()
@@ -251,14 +254,14 @@ class GPUApplication(object):
             else:
                 pass
 
-        return GPUCommand(func, [self, buf, buf_FT], {"timestamp": timestamp, "name":name})
+        return GPUCommand(func, [self, buf], {"timestamp": timestamp, "name":name})
 
-    def cmdIFFT(self, buf_FT, buf, name="", timestamp=False):
-        def func(self, buf_FT, buf, name="", timestamp=False):
+    def cmdIFFT(self, buf, name="", timestamp=False):
+        def func(self, buf, name="", timestamp=False):
             
             if self._fftAppInv is None:
-                self._fftAppInv = prepare_fft(buf, buf_FT, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
-            self._fftAppInv.ifft(self._commandBuffer, buf_FT._buffer, buf._buffer)
+                self._fftAppInv = prepare_fft(buf, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
+            self._fftAppInv.ifft(self._commandBuffer, buf._buffer)
 
             if timestamp == True:
                 self.cmdAddTimestamp("fft").writeCommand()
@@ -267,7 +270,7 @@ class GPUApplication(object):
             else:
                 pass
 
-        return GPUCommand(func, [self, buf_FT, buf], {"timestamp": timestamp, "name": name})
+        return GPUCommand(func, [self, buf], {"timestamp": timestamp, "name": name})
 
 
     def run(self):
@@ -646,7 +649,7 @@ class GPUApplication(object):
                     range=bufferObject._bufferSize,
                 ),
             )
-            for bufferObject in self._bufferObjects if bufferObject._descriptorType is not None
+            for bufferObject in self._bufferObjects if bufferObject._descriptorType
         ]
 
         # perform the update of the descriptor set.
@@ -1018,6 +1021,10 @@ class GPUApplication(object):
 
         return result_dict
 
+    def setIndirectBuffer(self, buffer, host_type):
+        indirect_h = buffer.getHostStructPtr(host_type)
+        self._indirect_h = indirect_h
+        return indirect_h
 
 class GPUCommand:
     def __init__(self, func, vargs, kwargs):
@@ -1053,16 +1060,13 @@ class GPUBuffer:
             #self._shape = (self._batchSize, self._fftSize)
         else:
             self._bufferSize = bufferSize
-        # self._bufferSize = bufferSize
               
         self._dstBinding = binding
 
         self._isInitialized = False
         self._stagingBufferInitialized = False
-        #self._delayedSetDataList = []
         
         self.name = ''
-        #self.shape = None
         self.app = app
         if self.app is not None:
             self.init_buffer()
@@ -1095,13 +1099,6 @@ class GPUBuffer:
             # sharingMode=vk.VK_SHARING_MODE_EXCLUSIVE,
             )
             self._combined = False
-            
-        # # Mapping is only required for stagingbuffers
-        # self._pmappedMemory = None
-        # self._pmappedMemory = vk.vkMapMemory(
-            # self._device, self._bufferMemory, 0, self._bufferSize, 0
-        # )
-        # self._hostPtr = int(vk.ffi.cast("unsigned long long", vk.ffi.from_buffer(self._pmappedMemory)))
         
         self.app._bufferObjects.append(self)
 
@@ -1141,6 +1138,9 @@ class GPUBuffer:
 
 
     def copyToBuffer(self, arr):
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
+
         data_size = arr.nbytes
         offset = 0
         while offset < data_size:
@@ -1151,6 +1151,9 @@ class GPUBuffer:
 
 
     def copyFromBuffer(self, arr):
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
+
         data_size = arr.nbytes
         offset = 0
         while offset < data_size:
@@ -1161,6 +1164,9 @@ class GPUBuffer:
 
 
     def toArray(self, arr, offset=0, copy_size=None):
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
+
         if copy_size is None:
             copy_size = arr.nbytes
         ctypes.memmove(arr.ctypes.data + offset, ctypes.c_void_p(self._hostPtr),  copy_size)
@@ -1168,16 +1174,14 @@ class GPUBuffer:
 
 
     def fromArray(self, arr, offset=0, copy_size=None):
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
+
         if copy_size is None:
             copy_size = arr.nbytes
         ctypes.memmove(ctypes.c_void_p(self._hostPtr), arr.ctypes.data + offset, copy_size)
         return offset + copy_size
-            
-
-    # def transferStagingBufferNow(self, **kwargs):
-        # kwargs['now'] = True
-        # self.transferStagingBuffer(**kwargs)
-
+    
     
     def transferStagingBuffer(self, direction='H2D', srcOffset=0, dstOffset=0, size=None, transfer_now=True):
         
@@ -1230,21 +1234,16 @@ class GPUBuffer:
         return self.app.cmdClearBuffer(self, timestamp=timestamp)
 
 
-    # def setFFTShape(self, shape):
-    #     self._shape = shape
-    #     self._dtype = np.dtype(np.float32)
-    #     self._itemsize = self._dtype.itemsize
-
     def setBatchSize(self, batch, grow_only=True, factor=1.5):
         if batch > self._batchSize:
             self._batchSize = int(factor * batch)
             new_size = self._batchSize * (self._fftSize // 2 + 1) * 2 * self._itemsize
-            self.resize_buffer(new_size)
-            print('batch:', batch)
+            self.resizeBuffer(new_size)
+            #print('batch:', batch)
                     
     
-    def resize_buffer(self, nbytes):
-        print('resizing buffer from',self._bufferSize, 'to', nbytes)
+    def resizeBuffer(self, nbytes):
+        #print('resizing buffer from',self._bufferSize, 'to', nbytes)
         self.app._fftAppFwd = None
         self.free()
         self._bufferSize = nbytes
@@ -1252,213 +1251,20 @@ class GPUBuffer:
         
         if self.app._commandBuffer is not None: #only rewrite if one already exists
             self.app.writeCommandBuffer()
-        
-        
-    # def copyNowH2D(self, srcOffset=0, dstOffset=0, size=1):
-    
-        # if self._combined:
-            # return 
-        
-        # copy_region = vk.VkBufferCopy(srcOffset=srcOffset, dstOffset=dstOffset, size=size)
-        
-        # self.app.oneTimeCommand(vk.vkCmdCopyBuffer,
-            # srcBuffer=self._stagingBuffer,
-            # dstBuffer=self._buffer,
-            # regionCount=1,
-            # pRegions=[copy_region],
-            # ) 
-            
-    # def copyNowD2H(self, srcOffset=0, dstOffset=0, size=1):
-        
-                    
-        # if self._combined:
-            # return
-        
-        # copy_region = vk.VkBufferCopy(srcOffset=srcOffset, dstOffset=dstOffset, size=size)
-                
-        # self.app.oneTimeCommand(vk.vkCmdCopyBuffer,
-            # srcBuffer=self._buffer,
-            # dstBuffer=self._stagingBuffer,
-            # regionCount=1,
-            # pRegions=[copy_region],
-            # )  
-
 
     
     def getHostStructPtr(self, struct):
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
         self._structPtr = ctypes.cast(self._hostPtr, ctypes.POINTER(struct))
         return self._structPtr.contents
     
 
-    # def _delayedSetData(self):
-    #     while len(self._delayedSetDataList):
-    #         vargs = self._delayedSetDataList.pop(0)
-    #         self.setData(*vargs) #TODO: Does not currently include kwargs!!!
-
     def free(self): #TODO: is this up to date?
         self._isInitialized = False
-        #self._bufferSize = 0
-        
-        # if self._pmappedMemory:
-            # vk.vkUnmapMemory(self._device, self._bufferMemory)
-            # self._pmappedMemory = None
-            # self._hostPtr = None
-        
+  
         if self._buffer:
             vk.vkDestroyBuffer(self._device, self._buffer, None)
         if self._bufferMemory:
             vk.vkFreeMemory(self._device, self._bufferMemory, None)
         
-
-# class GPUArray(GPUBuffer):
-    # def __init__(
-        # self, shape=(1,), dtype=np.int32, strides=None, binding=None, app=None, buffer_margin=0
-    # ):
-    
-        # self.dtype = np.dtype(dtype)
-        # self.itemsize = self.dtype.itemsize
-    
-        # self.shape = shape
-        # self.size = int(np.prod(self.shape))
-        # self.nbytes = self.size * self.itemsize
-
-        # if strides is None:
-            # self._calcStrides()
-        # else:
-            # self.strides = strides
-
-        # self._bufferMargin = buffer_margin
-
-        # super().__init__(
-            # bufferSize=self.nbytes + buffer_margin,
-            # uniform=False,
-            # binding=binding,
-            # app=app,
-        # )
-
-        # self.refresh_array()
-
-    # def refresh_array(self):
-        # return
-        # # self._arr = None
-        # # if self._isInitialized:
-            # # self._arr = np.frombuffer(self._pmappedMemory, dtype=self.dtype, count=self.size).reshape(
-                # # self.shape
-            # # )
-
-    # def reshape(self, shape, strides=None, grow_only=True):
-        # if shape == self.shape:
-            # return
-        
-        # self.shape = shape
-        # self.size = int(np.prod(self.shape))
-        # self.nbytes = self.size * self.itemsize
-
-        # if strides is None:
-            # self._calcStrides()
-        # else:
-            # self.strides = strides
-        
-        # new_size = self.nbytes + self._bufferMargin
-        # if  new_size > self._bufferSize or (not grow_only and new_size != self._bufferSize):
-            # self.resize_buffer(new_size)
-            
-        # self.refresh_array()
-        
-   
-    # def reset_buffer(self, nbytes=0):
-        # self.free()
-        # self._bufferSize = nbytes
-        # # It is up to the user to call init_buffer() again now
-    
-    # def resize_buffer(self, nbytes):
-        # #print('resizing buffer from',self._bufferSize, 'to',nbytes)
-        # # Destroy all FFT apps that reference this buffer:
-        # for key in [*self.app._fftApps.keys()]:
-            # if id(self) in key:
-                # self.app._fftApps.pop(key)
-        
-        # self.free()
-        # self._bufferSize = nbytes
-        # self.init_buffer()
- 
-
-    # # def init_buffer(self):
-        # # print('initializing buffer...', self.name)
-        # # super().init_buffer()
-        # # if self._arr is None:
-            # # self.refresh_array()
-            
-            
-    # # def free(self):
-        # # self._arr = None
-        # # super().free()
-
-    # @staticmethod
-    # def fromArr(arr, binding=None, app=None):
-        # bufferObject = GPUArray(
-            # arr.shape, arr.dtype, arr.strides, binding=binding, app=app
-        # )
-        # bufferObject.setData(arr)
-        # return bufferObject
-
-    # def _calcStrides(self, order="c"):
-
-        # sshape = np.zeros_like(self.shape)
-        # sshape[0] = 1  # TODO: Check this, should maybe be sshape[-1]=1; shape[:-1] = self.shape[:-1]??
-        # sshape[1:] = self.shape[:-1]
-        # sshape *= self.itemsize
-
-        # if order == "c":
-            # self.strides = np.multiply.accumulate(sshape[::-1])[::-1]
-        # else:
-            # self.strides = np.multiply.accumulate(sshape)
-
-    # def setData(self, arr, byte_offset=0):
-        # if self._isInitialized:
-            # ctypes.memmove(
-                # ctypes.c_void_p(self._hostPtr + byte_offset), arr.ctypes.data, arr.nbytes
-                # # ctypes.c_void_p(self._arr.ctypes.data + byte_offset), arr.ctypes.data, arr.nbytes
-            # )
-        # else:
-            # self._delayedSetDataList.append((arr, byte_offset))
-
-        # return arr.nbytes
-
-    # def getData(self):
-        # arr = np.zeros(self.shape, dtype=self.dtype)
-        # ctypes.memmove(
-            # arr.ctypes.data, ctypes.c_void_p(self._hostPtr), self.nbytes
-            # )
-        # return arr
-        
-        # # return self._arr
-
-# class GPUStruct(GPUBuffer):
-    # def __init__(self, bufferSize=0, binding=None, app=None):
-        # super().__init__(bufferSize=bufferSize, uniform=True, binding=binding, app=app)
-
-    # def fromStruct(struct, binding=None, app=None):
-        # bufferSize = ctypes.sizeof(struct)
-        # bufferObject = GPUStruct(bufferSize=bufferSize, binding=binding, app=app)
-        # bufferObject.setData(struct)
-        # return bufferObject
-
-    # # def fromStruct(structPtr, binding=None, app=None):
-    # # bufferSize = ffi.sizeof(structPtr[0])
-    # # bufferObject = GPUStruct(bufferSize=bufferSize, binding=binding, app=app)
-    # # bufferObject.setData(structPtr)
-    # # return bufferObject
-
-    # # def setData(self, structPtr):
-    # # ffi.memmove(self._pmappedMemory, structPtr, self._bufferSize)
-
-    # def setData(self, struct):
-        # if self._isInitialized:
-            # ctypes.memmove(ctypes.c_void_p(self._hostPtr), ctypes.byref(struct), self._bufferSize)
-        # else:
-            # self._delayedSetDataList.append((struct,))
-
-    # def getData(self):
-        # # not implemented
-        # pass

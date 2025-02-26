@@ -85,7 +85,7 @@ Ntpb = 1024  # threads per block
 threads = (Ntpb, 1, 1)
 w0 = 0.0
 seed(1)
-Nl = 2_000_000
+Nl = 2000000
 Nw = 8
 
 w_min = 0.1
@@ -165,7 +165,7 @@ print('Done! {:.3f}'.format((tc1-tc0)*1e3))
 #%% GPU vulkan
 print('GPU start...')
 shader_path = os.path.dirname(__file__)
-app = GPUApplication(deviceID=0, path=shader_path)
+app = GPUApplication(deviceID=1, path=shader_path)
 #app.print_memory_properties()
 
 app.init_d = GPUBuffer(sizeof(init_t), usage='uniform', binding=0)
@@ -174,6 +174,8 @@ app.database_d = GPUBuffer(database.nbytes, binding=2)
 app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
 app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
+
+
 
 # initalize data:
 init_h = app.init_d.getHostStructPtr(init_t)
@@ -215,7 +217,7 @@ app.appendCommands([
     app.cmdAddTimestamp('End'),
 ])
 
-app.writeCommandBuffer()
+#app.writeCommandBuffer()
 
 app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
 app.updateBatchSizeFunctionList.append(app.setFwdFFTWorkGroupSize)

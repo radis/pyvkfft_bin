@@ -453,7 +453,7 @@ class GPUApplication(object):
         return -1
     
     # find memory type with desired properties.
-    def findMemoryType3(self, memoryTypeBits, kind):
+    def findLargeMemoryType(self, memoryTypeBits, kind):
         
         # dev_props = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
         # host_props = vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -465,10 +465,10 @@ class GPUApplication(object):
         heap_dict = {}
         flip = (0 if kind & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT else vk.VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
         for i, heap in enumerate(mem_properties.memoryHeaps):
-            if (heap.flags & vk.VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)^flip:
+            if (heap.flags & vk.VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)^flip: # look for device/host local memory
                 heap_dict[heap.size // (1024 * 1024)] = i
         
-        heap_id = heap_dict[sorted(heap_dict)[-1]]
+        heap_id = heap_dict[sorted(heap_dict)[-1]] #select the biggest heap that is device/host local
 
         #First check if we can find dual host/device memory:
         for i, type in enumerate(mem_properties.memoryTypes):
@@ -784,7 +784,13 @@ class GPUApplication(object):
         
         # allocate memory:
         memoryRequirements = vk.vkGetBufferMemoryRequirements(self._device, buffer)
-        index = self.findMemoryType3(memoryRequirements.memoryTypeBits, kind)
+        if (usage & vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT == vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+            or usage & vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT == vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT):
+            #if looking for an indirect buffer, prioritize a host visible device buffer
+            index = self.findMemoryType(memoryRequirements.memoryTypeBits, kind)
+        else:
+            #otherwise, prioritize the largest buffer, possible exclusively device local:
+            index = self.findLargeMemoryType(memoryRequirements.memoryTypeBits, kind)
         
         #print(memoryRequirements.memoryTypeBits)
         #print(' Found type ',index)
@@ -1173,7 +1179,10 @@ class GPUBuffer:
         
         if self._combined:
             return
-            
+        
+        if not self._stagingBufferInitialized:
+            self.initStagingBuffer()
+
         if direction == 'H2D':
             srcBuffer = self._stagingBuffer
             dstBuffer = self._buffer
@@ -1200,6 +1209,7 @@ class GPUBuffer:
                 )  
 
         else:
+            print('here we are', self.name)
             vk.vkCmdCopyBuffer(
                 self.app._commandBuffer, 
                 srcBuffer=srcBuffer, 

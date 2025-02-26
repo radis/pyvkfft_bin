@@ -275,6 +275,10 @@ class GPUApplication(object):
 
 
     def run(self):
+        if self._commandBuffer is None: 
+            #print('writing command buffer')
+            self.writeCommandBuffer()
+        #print('cmdbuf:',self._commandBuffer)
         self.runCommandBuffer()
         
     @staticmethod
@@ -1034,6 +1038,12 @@ class GPUApplication(object):
 
     def setFwdFFTWorkGroupSize(self, N):
         self._fftAppFwd.setFFTWorkGroupSize(N)
+
+    def appendCommands(self, cmd):
+        if isinstance(cmd, list):
+            self.command_list += cmd
+        else:
+            self.command_list.append(cmd)
 
 
 class GPUCommand:

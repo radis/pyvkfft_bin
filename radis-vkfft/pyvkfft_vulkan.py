@@ -294,30 +294,31 @@ class VkFFTApp(VkFFTAppBase):
 
         shape = np.ones(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
         skip = np.zeros(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
+        grouped_batch = -np.ones(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
 
         shape[0] = self.shape[-1]
         # skip[1 : len(self.shape)] = 1
-        FFTdim = 1
+        #FFTdim = 1
         n_batch = 1 if len(self.shape) == 1 else self.shape[-2]
 
-        grouped_batch = np.empty(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
-        grouped_batch.fill(-1)
-        grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
+        # grouped_batch = np.empty(vkfft_max_fft_dimensions(), dtype=vkfft_long_type)
+        # grouped_batch.fill(-1)
+        # grouped_batch[: len(self.groupedBatch)] = self.groupedBatch
 
         indirectDispatch = 1 if self.exclusivePlan == 1 else 0
 
-        if self.norm == "ortho":
-            norm = 0
-        else:
-            norm = self.norm
+        # if self.norm == "ortho":
+        #     norm = 0
+        # else:
+        #     norm = self.norm
         
         return _vkfft_vulkan.make_config(
             shape,
             self.bufferSize,
-            self.bufferSize,
-            FFTdim,
+            0, #self.bufferSize,
+            1,#FFTdim,
             self.bufferSrc,
-            self.bufferDest,
+            None, #self.bufferDest,
             indirectDispatch,
             self.indirectBuffer,
             self.indirectOffset,
@@ -328,11 +329,11 @@ class VkFFTApp(VkFFTAppBase):
             ctypes.byref(self.commandPool),
             ctypes.byref(self.fence),
             0, #isCompilerInitialized
-            norm,
+            1,#norm,
             self.precision,
-            int(self.r2c),
-            int(self.dct),
-            int(self.disableReorderFourStep),
+            1,#int(self.r2c),
+            0,#int(self.dct),
+            0,#int(self.disableReorderFourStep),
             int(self.registerBoost),
             int(self.use_lut),
             int(self.keepShaderCode),

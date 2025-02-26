@@ -85,7 +85,7 @@ Ntpb = 1024  # threads per block
 threads = (Ntpb, 1, 1)
 w0 = 0.0
 seed(1)
-Nl = 200
+Nl = 2_000_000
 Nw = 8
 
 w_min = 0.1
@@ -97,14 +97,14 @@ dxw = np.log(w_max / w_min) / (Nw - 1)
 I0_arr, t0_arr, w0_arr = mock_spectrum(Nl, t_min=t_min, t_max=t_max, w_min=w_min, w_max=w_max)
 database = np.array([I0_arr, t0_arr, w0_arr])
 
-#%% CPU Legacy method:
-print('Adding... ', end='')
-tc0 = perf_counter()
-I_arr0 = np.zeros(Nt, dtype=np.float32)
-for I0, t0, w0 in database.T:
-    I_arr0 += I0*L(t_arr - t0, w0)
-tc1 = perf_counter()
-print('Done! {:.3f}'.format((tc1-tc0)*1e3))
+# #%% CPU Legacy method:
+# print('Adding... ', end='')
+# tc0 = perf_counter()
+# I_arr0 = np.zeros(Nt, dtype=np.float32)
+# for I0, t0, w0 in database.T:
+#     I_arr0 += I0*L(t_arr - t0, w0)
+# tc1 = perf_counter()
+# print('Done! {:.3f}'.format((tc1-tc0)*1e3))
 
 
 #%% CPU DIT method:
@@ -195,7 +195,7 @@ app.database_d.copyToBuffer(database)
 indirect_h = app.setIndirectBuffer(app.indirect_d, workGroupSizeArray_t) #TODO: set fwd/inv
 
 
-app.command_list = [ #TODO: do this with append methods?
+app.appendCommands([
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
     app.iter_d.cmdTransferStagingBuffer('H2D'),
     app.S_kl_d.cmdClearBuffer(),
@@ -206,7 +206,7 @@ app.command_list = [ #TODO: do this with append methods?
     #app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
     app.cmdIFFT(app.spectrum_d, name='FFTb'), 
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
-]
+])
 
 app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
 app.updateBatchSizeFunctionList.append(app.setFwdFFTWorkGroupSize)
@@ -217,7 +217,7 @@ I_arr2 = np.zeros(Nt, dtype=np.float32)
 
 ## First iteration:
 app.setBatchSize(Nw)
-app.run() #TODO: check if command buffer was written
+app.run() #TODO: check if command buffer should be rewritten
 app.spectrum_d.toArray(I_arr2)
 
 
@@ -242,7 +242,7 @@ def update(val):
     a = sw.val
 
     t0 = perf_counter()
-    #I_arr1 = spectrum_dit(a)
+    # I_arr1 = spectrum_dit(a)
     t1 = perf_counter()
 
     if sNw.val != Nw_i:
@@ -265,5 +265,16 @@ def update(val):
 
 sw.on_changed(update)
 sNw.on_changed(update)
+
+times = []
+for i in range(20):
+    
+    t0 = perf_counter()
+    iter_h.a = 0.01*i
+    app.run()
+    app.spectrum_d.toArray(I_arr2)
+    t1 = perf_counter()
+    print(i,(t1 - t0)*1e3)
+
 
 plt.show()

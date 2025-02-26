@@ -215,6 +215,8 @@ app.appendCommands([
     app.cmdAddTimestamp('End'),
 ])
 
+app.writeCommandBuffer()
+
 app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
 app.updateBatchSizeFunctionList.append(app.setFwdFFTWorkGroupSize)
 

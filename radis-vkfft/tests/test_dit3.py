@@ -165,7 +165,7 @@ print('Done! {:.3f}'.format((tc1-tc0)*1e3))
 #%% GPU vulkan
 print('GPU start...')
 shader_path = os.path.dirname(__file__)
-app = GPUApplication(deviceID=1, path=shader_path)
+app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
 
 app.init_d = GPUBuffer(sizeof(init_t), usage='uniform', binding=0)
@@ -217,7 +217,7 @@ app.appendCommands([
     app.cmdAddTimestamp('End'),
 ])
 
-#app.writeCommandBuffer()
+app.writeCommandBuffer()
 
 app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
 app.updateBatchSizeFunctionList.append(app.setFwdFFTWorkGroupSize)

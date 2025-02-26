@@ -66,7 +66,7 @@ def prepare_fft(buffer, name="", norm=1, compute_app=None, indirectOffset=0, exc
     return VkFFTApp(
         buffer=buffer,
         indirectOffset=indirectOffset,
-        indirectBuffer=compute_app.indirect_d._buffer,
+        indirectBuffer=compute_app.indirect_d,
         indirectHost=compute_app._indirect_h,
         physical_device=compute_app._physicalDevice,
         device=compute_app._device,
@@ -236,8 +236,8 @@ class VkFFTApp(VkFFTAppBase):
         self.bufferSrc = _types.VkBuffer(getVulkanPtr(buffer._buffer))
         self.bufferDest = _types.VkBuffer(getVulkanPtr(buffer._buffer))
         self.indirectOffset = indirectOffset
-        self.indirectBuffer = _types.VkBuffer(getVulkanPtr(indirectBuffer))
-        self.indirectHost = indirectHost
+        self.indirectBuffer = _types.VkBuffer(getVulkanPtr(indirectBuffer._buffer))
+        self.indirectHost = indirectBuffer._structPtr.contents
         self.physicalDevice = _types.VkPhysicalDevice(getVulkanPtr(physical_device))
         self.device = _types.VkDevice(getVulkanPtr(device))
         self.queue = _types.VkQueue(getVulkanPtr(queue))
@@ -404,6 +404,13 @@ class VkFFTApp(VkFFTAppBase):
         )
 
 
+    def setFFTWorkGroupSize(self, N):
+        for wg in self.indirectHost:
+            # print(wg.id, ':', wg.x, wg.y, wg.z, '->', end=' ')
+            ax = 'y' if wg.id & 2 else 'z'
+            setattr(wg, ax, N)
+            # print(wg.x, wg.y, wg.z)
+
 def vkfft_version():
     """
     Get VkFFT version
@@ -424,41 +431,3 @@ def vkfft_max_fft_dimensions():
     """
     return _vkfft_vulkan.vkfft_max_fft_dimensions()
 
-
-##def cuda_runtime_version(raw=False):
-##    """
-##    Get CUDA runtime version
-##
-##    :param raw: if True, return the version as X*1000+Y*10+Z
-##    :return: version as X.Y.Z
-##    """
-##    int_ver = _vkfft_cuda.cuda_runtime_version()
-##    if raw:
-##        return raw
-##    return "%d.%d.%d" % (int_ver // 1000, (int_ver % 1000) // 10, int_ver % 10)
-##
-##
-##def cuda_driver_version(raw=False):
-##    """
-##    Get CUDA driver version
-##
-##    :param raw: if True, return the version as X*1000+Y*10+Z
-##    :return: version as X.Y.Z
-##    """
-##    int_ver = _vkfft_cuda.cuda_driver_version()
-##    if raw:
-##        return raw
-##    return "%d.%d.%d" % (int_ver // 1000, (int_ver % 1000) // 10, int_ver % 10)
-##
-##
-##def cuda_compile_version(raw=False):
-##    """
-##    Get CUDA version against which pyvkfft was compiled
-##
-##    :param raw: if True, return the version as X*1000+Y*10+Z
-##    :return: version as X.Y.Z
-##    """
-##    if raw:
-##        return raw
-##    int_ver = _vkfft_cuda.cuda_compile_version()
-##    return "%d.%d.%d" % (int_ver // 1000, (int_ver % 1000) // 10, int_ver % 10)

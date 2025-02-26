@@ -29,7 +29,7 @@ class workGroupSize_t(Structure):
 
 workGroupSizeArray_t = workGroupSize_t * 4
 
-class init_params_t(Structure):
+class init_t(Structure):
     _fields_ = [
         ("Nl", c_int),
         ("Nt", c_int),
@@ -40,7 +40,7 @@ class init_params_t(Structure):
         ("w_min", c_float),
     ]
 
-class iter_params_t(Structure):
+class iter_t(Structure):
     _fields_ = [
         ("a", c_float),
         ("Nw", c_int),
@@ -167,38 +167,37 @@ print('GPU start...')
 shader_path = os.path.dirname(__file__)
 app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
-I_arr2 = np.zeros(Nt, dtype=np.float32)
 
-app.init_params_d = GPUBuffer(sizeof(init_params_t), usage='uniform', binding=0)
-app.iter_params_d = GPUBuffer(sizeof(iter_params_t), usage='uniform', binding=1)
+app.init_d = GPUBuffer(sizeof(init_t), usage='uniform', binding=0)
+app.iter_d = GPUBuffer(sizeof(iter_t), usage='uniform', binding=1)
 app.database_d = GPUBuffer(database.nbytes, binding=2)
 app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
 app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
 app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
 
 # initalize data:
+init_h = app.init_d.getHostStructPtr(init_t)
+init_h.Nl = Nl
+init_h.Nt = Nt
+init_h.Nf = Nf
+init_h.t_min = t_min
+init_h.dt    = dt
+init_h.w_min = w_min
+app.init_d.transferStagingBuffer('H2D')
+
+iter_h = app.iter_d.getHostStructPtr(iter_t)
+iter_h.a = 0.0
+iter_h.Nw = Nw
+iter_h.dxw = dxw
+
 app.database_d.copyToBuffer(database)
 
-init_params_h = app.init_params_d.getHostStructPtr(init_params_t)
-init_params_h.Nl = Nl
-init_params_h.Nt = Nt
-init_params_h.Nf = Nf
-init_params_h.t_min = t_min
-init_params_h.dt    = dt
-init_params_h.w_min = w_min
-app.init_params_d.transferStagingBuffer('H2D')
-
-iter_params_h = app.iter_params_d.getHostStructPtr(iter_params_t)
-iter_params_h.a = 0.0
-iter_params_h.Nw = Nw
-iter_params_h.dxw = dxw
-
-indirect_h = app.setIndirectBuffer(app.indirect_d, workGroupSizeArray_t)
+indirect_h = app.setIndirectBuffer(app.indirect_d, workGroupSizeArray_t) #TODO: set fwd/inv
 
 
-app.command_list = [
+app.command_list = [ #TODO: do this with append methods?
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
-    app.iter_params_d.cmdTransferStagingBuffer('H2D'),
+    app.iter_d.cmdTransferStagingBuffer('H2D'),
     app.S_kl_d.cmdClearBuffer(),
     app.spectrum_d.cmdClearBuffer(),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
@@ -209,42 +208,24 @@ app.command_list = [
     app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
 ]
 
-app.writeCommandBuffer()
+app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
+app.updateBatchSizeFunctionList.append(app.setFwdFFTWorkGroupSize)
+
+I_arr2 = np.zeros(Nt, dtype=np.float32)
 
 
 
-update_dict = {}
-for i, wg in enumerate(indirect_h):
-    inverse = wg.id & 1
-    r2c = (wg.id & 2) >> 1
-
-    if not inverse:
-        update_dict[i] = 'y' if r2c else 'z'
-
-    #print(f'({wg.x:3d}, {wg.y:3d}, {wg.z:3d}) : {inverse:1d}, {r2c:1d}')
-       
-
-for i in update_dict:
-    wg = indirect_h[i]
-    setattr(wg,update_dict[i], Nw)
-
-for i, wg in enumerate(indirect_h):
-    inverse = wg.id & 1
-    r2c = (wg.id & 2) >> 1
-    print(f'({wg.x:3d}, {wg.y:3d}, {wg.z:3d}) : {inverse:1d}, {r2c:1d}')
-   
-
-# iteration:
-app.S_kl_d.setBatchSize(Nw) #TODO:Must be done after writeCommandBuffer... But why??
-app.run()
+## First iteration:
+app.setBatchSize(Nw)
+app.run() #TODO: check if command buffer was written
 app.spectrum_d.toArray(I_arr2)
-
-fig, ax = plt.subplots()
-plt.subplots_adjust(left=0.25, bottom=0.25)
 
 
 
 #%%
+fig, ax = plt.subplots()
+plt.subplots_adjust(left=0.25, bottom=0.25)
+
 p1, = ax.plot(t_arr, I_arr1)
 p2, = ax.plot(t_arr, I_arr2, 'k--')
 
@@ -267,16 +248,11 @@ def update(val):
     if sNw.val != Nw_i:
         Nw_i = sNw.val
         dxw_i = np.log(w_max / w_min) / (Nw_i - 1)
-        iter_params_h.Nw = Nw_i
-        iter_params_h.dxw = dxw_i
-        
-        app.S_kl_d.setBatchSize(Nw_i)
-        for i in update_dict:
-            wg = indirect_h[i]
-            setattr(wg,update_dict[i], Nw_i)
-    
+        iter_h.Nw = Nw_i
+        iter_h.dxw = dxw_i
+        app.setBatchSize(Nw_i)
 
-    iter_params_h.a = a
+    iter_h.a = a
     app.run()
     app.spectrum_d.toArray(I_arr2)
     t2 = perf_counter()

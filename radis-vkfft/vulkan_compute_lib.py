@@ -20,6 +20,7 @@ QUERY_POOL_SIZE = 32  # Max number of queries (=timestamps)
 DEV_PROPS = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 HOST_PROPS = vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
+#TODO: split this up in a purely vulkan class and a radis class
 class GPUApplication(object):
     def __init__(self, deviceID=0, path="./", verbose=True):
         # In order to use Vulkan, you must create an instance
@@ -37,6 +38,7 @@ class GPUApplication(object):
         self._fftAppFwd = None
         self._fftAppInv = None
         self._descriptorSetInitialized = False
+        self.updateBatchSizeFunctionList = []
 
 
         self._computeShaderModules = []
@@ -66,7 +68,7 @@ class GPUApplication(object):
         self.createInstance()
         self.selectPhysicalDevice(deviceID, verbose=verbose)
         self.createDevice()
-        self.init_shaders()
+        #self.init_shaders()
         
         self.createCommandBuffer()
 
@@ -115,13 +117,12 @@ class GPUApplication(object):
             #val._delayedSetData()
         self.__dict__[name] = val
 
-    def init_shaders(self):
-        shader_fnames = [f for f in os.listdir(self._shaderPath) if f[-3:] == "spv"]
-        for shader_fname in shader_fnames:
-            fun_name = shader_fname.split(".")[0]  # TODO: do this with os.path.basename
-            #named_shader = staticmethod(partial(self.cmdScheduleShader, shader_fname))
-            named_shader = staticmethod(partial(self.cmdScheduleShader, shader_fname))
-            setattr(self.__class__, fun_name, named_shader)
+    # def init_shaders(self):
+    #     shader_fnames = [f for f in os.listdir(self._shaderPath) if f[-3:] == "spv"]
+    #     for shader_fname in shader_fnames:
+    #         fun_name = shader_fname.split(".")[0]  # TODO: do this with os.path.basename
+    #         named_shader = staticmethod(partial(self.cmdScheduleShader, shader_fname))
+    #         setattr(self.__class__, fun_name, named_shader)
 
     def cmdScheduleShader(
         self,
@@ -1025,6 +1026,15 @@ class GPUApplication(object):
         indirect_h = buffer.getHostStructPtr(host_type)
         self._indirect_h = indirect_h
         return indirect_h
+    
+    def setBatchSize(self, N):
+        for f in self.updateBatchSizeFunctionList:
+            f(N)
+
+
+    def setFwdFFTWorkGroupSize(self, N):
+        self._fftAppFwd.setFFTWorkGroupSize(N)
+
 
 class GPUCommand:
     def __init__(self, func, vargs, kwargs):
@@ -1258,7 +1268,6 @@ class GPUBuffer:
             self.initStagingBuffer()
         self._structPtr = ctypes.cast(self._hostPtr, ctypes.POINTER(struct))
         return self._structPtr.contents
-    
 
     def free(self): #TODO: is this up to date?
         self._isInitialized = False

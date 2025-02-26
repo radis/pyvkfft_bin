@@ -3,9 +3,6 @@
 layout (local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2 ) in;
 layout (constant_id = 3) const int HAS_ATOMIC_ADD_FLOAT = 0; //this value is updated by the host code
 #define float_atomic_t uint
-
-
-#ifdef VULKAN
 #define atomicAddFloatX(MEM, INDATA)      \
 {                                         \
     uint expected_mem = MEM;              \
@@ -17,7 +14,10 @@ layout (constant_id = 3) const int HAS_ATOMIC_ADD_FLOAT = 0; //this value is upd
          returned_mem = atomicCompSwap(MEM, expected_mem, new_mem); \
     } \
 }
-#endif
+
+//#extension GL_EXT_shader_atomic_float : enable
+//#define float_atomic_t float
+//#define atomicAddFloatX(addr, val) atomicAdd(addr, val)
 
 layout(std430, binding = 0) uniform initData{
     

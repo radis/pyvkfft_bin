@@ -282,15 +282,15 @@ def update(val):
 sw.on_changed(update)
 sNw.on_changed(update)
 
-# times = []
-# for i in range(20):
+times = []
+for i in range(20):
     
-#     t0 = perf_counter()
-#     iter_h.a = 0.01*i
-#     app.run()
-#     app.spectrum_d.toArray(I_arr2)
-#     t1 = perf_counter()
-#     print(i,(t1 - t0)*1e3)
+    t0 = perf_counter()
+    iter_h.a = 0.01*i
+    app.run()
+    app.spectrum_d.toArray(I_arr2)
+    t1 = perf_counter()
+    print(i,(t1 - t0)*1e3)
 
 
 plt.show()

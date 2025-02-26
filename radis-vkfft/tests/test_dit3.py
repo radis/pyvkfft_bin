@@ -196,16 +196,23 @@ indirect_h = app.setIndirectBuffer(app.indirect_d, workGroupSizeArray_t) #TODO: 
 
 
 app.appendCommands([
+    app.cmdAddTimestamp('Initialization'),
     app.indirect_d.cmdTransferStagingBuffer('H2D'),
     app.iter_d.cmdTransferStagingBuffer('H2D'),
+    app.cmdAddTimestamp('Zeroing buffers'),
     app.S_kl_d.cmdClearBuffer(),
     app.spectrum_d.cmdClearBuffer(),
+    app.cmdAddTimestamp('Line addition'),
     app.cmdScheduleShader('cmdTestFillLDM.spv', (Nl // Ntpb + 1, 1, 1), threads),
+    app.cmdAddTimestamp('FFT fwd'),
     app.cmdFFT(app.S_kl_d, name='FFTa'),
+    app.cmdAddTimestamp('Apply conv.'),
     app.cmdScheduleShader('cmdTestApplyLineshapes.spv', (Nf // Ntpb + 1, 1, 1), threads),
     #app.cmdScheduleShader('cmdTestApplyLineshapesP.spv', (Nf // Ntpb + 1, Nw, 1), threads),
+    app.cmdAddTimestamp('FFT inv'),
     app.cmdIFFT(app.spectrum_d, name='FFTb'), 
-    app.spectrum_d.cmdTransferStagingBuffer('D2H'),   
+    app.spectrum_d.cmdTransferStagingBuffer('D2H'),
+    app.cmdAddTimestamp('End'),
 ])
 
 app.updateBatchSizeFunctionList.append(app.S_kl_d.setBatchSize)
@@ -256,7 +263,12 @@ def update(val):
     app.run()
     app.spectrum_d.toArray(I_arr2)
     t2 = perf_counter()
-
+    
+    timestamps = app.get_timestamps()
+    for key in timestamps:
+        print('{:15s}: {:10.3f}'.format(key, timestamps[key]))
+    print('')
+    
     ax.set_title('CPU: {:.1f} ms - GPU: {:.1f} ms'.format((t1-t0)*1e3, (t2-t1)*1e3))
     p1.set_ydata(I_arr1)
     p2.set_ydata(I_arr2)
@@ -266,15 +278,15 @@ def update(val):
 sw.on_changed(update)
 sNw.on_changed(update)
 
-times = []
-for i in range(20):
+# times = []
+# for i in range(20):
     
-    t0 = perf_counter()
-    iter_h.a = 0.01*i
-    app.run()
-    app.spectrum_d.toArray(I_arr2)
-    t1 = perf_counter()
-    print(i,(t1 - t0)*1e3)
+#     t0 = perf_counter()
+#     iter_h.a = 0.01*i
+#     app.run()
+#     app.spectrum_d.toArray(I_arr2)
+#     t1 = perf_counter()
+#     print(i,(t1 - t0)*1e3)
 
 
 plt.show()

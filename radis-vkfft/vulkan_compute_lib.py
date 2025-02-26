@@ -130,7 +130,6 @@ class GPUApplication(object):
         global_workgroup=(1, 1, 1),
         local_workgroup=(1, 1, 1),
         sync=True,
-        timestamp=False,
     ):
         def func(
             self,
@@ -138,7 +137,6 @@ class GPUApplication(object):
             global_workgroup=(1, 1, 1),
             local_workgroup=(1, 1, 1),
             sync=True,
-            timestamp=False,
         ):
 
             shader_fpath = os.path.join(self._shaderPath, shader_fname)
@@ -158,13 +156,6 @@ class GPUApplication(object):
             self._pipelineLayouts.append(pipelineLayout)
             self._pipelines.append(pipeline)
 
-            if timestamp == True:
-                self.cmdAddTimestamp(shader_fname.split(".")[0]).writeCommand()
-            elif isinstance(timestamp, str):
-                self.cmdAddTimestamp(timestamp).writeCommand()
-            else:
-                pass
-
         return GPUCommand(
             func,
             [
@@ -175,7 +166,6 @@ class GPUApplication(object):
                 "global_workgroup": global_workgroup,
                 "local_workgroup": local_workgroup,
                 "sync": sync,
-                "timestamp": timestamp,
             },
         )
 
@@ -188,7 +178,6 @@ class GPUApplication(object):
         indirect_offset=0,
         local_workgroup=(1, 1, 1),
         sync=True,
-        timestamp=False,
     ):
         def func(
             self,
@@ -197,7 +186,6 @@ class GPUApplication(object):
             indirect_offset=0,
             local_workgroup=(1, 1, 1),
             sync=True,
-            timestamp=False,
         ):
 
             shader_fpath = os.path.join(self._shaderPath, shader_fname)
@@ -217,12 +205,6 @@ class GPUApplication(object):
             self._pipelineLayouts.append(pipelineLayout)
             self._pipelines.append(pipeline)
 
-            if timestamp == True:
-                self.cmdAddTimestamp(shader_fname.split(".")[0]).writeCommand()
-            elif isinstance(timestamp, str):
-                self.cmdAddTimestamp(timestamp).writeCommand()
-            else:
-                pass
 
         return GPUCommand(
             func,
@@ -235,43 +217,29 @@ class GPUApplication(object):
                 "indirect_offset": indirect_offset,
                 "local_workgroup": local_workgroup,
                 "sync": sync,
-                "timestamp": timestamp,
             },
         )
 
 
 
-    def cmdFFT(self, buf, name="", timestamp=False):
-        def func(self, buf, name="", timestamp=False):
+    def cmdFFT(self, buf, name=""):
+        def func(self, buf, name=""):
             
             if self._fftAppFwd is None:
                 self._fftAppFwd = prepare_fft(buf, name=name, compute_app=self, indirectOffset=0, exclusivePlan=1)
             self._fftAppFwd.fft(self._commandBuffer, buf._buffer)
 
-            if timestamp == True:
-                self.cmdAddTimestamp("fft").writeCommand()
-            elif isinstance(timestamp, str):
-                self.cmdAddTimestamp(timestamp).writeCommand()
-            else:
-                pass
 
-        return GPUCommand(func, [self, buf], {"timestamp": timestamp, "name":name})
+        return GPUCommand(func, [self, buf], {"name":name})
 
-    def cmdIFFT(self, buf, name="", timestamp=False):
-        def func(self, buf, name="", timestamp=False):
+    def cmdIFFT(self, buf, name=""):
+        def func(self, buf, name=""):
             
             if self._fftAppInv is None:
                 self._fftAppInv = prepare_fft(buf, name=name, compute_app=self, indirectOffset=16*4, exclusivePlan=-1)
             self._fftAppInv.ifft(self._commandBuffer, buf._buffer)
 
-            if timestamp == True:
-                self.cmdAddTimestamp("fft").writeCommand()
-            elif isinstance(timestamp, str):
-                self.cmdAddTimestamp(timestamp).writeCommand()
-            else:
-                pass
-
-        return GPUCommand(func, [self, buf], {"timestamp": timestamp, "name": name})
+        return GPUCommand(func, [self, buf], {"name": name})
 
 
     def run(self):
@@ -342,6 +310,9 @@ class GPUApplication(object):
             for i, device in enumerate(devices):
                 props = vk.vkGetPhysicalDeviceProperties(device)
                 devname = vk.ffi.string(props.obj.deviceName).decode()
+                if i == self._deviceID:
+                    self._timestampPeriod = props.limits.timestampPeriod
+
                 print(
                     "[{:s}] {:d}: {:s}".format(
                         "X" if i == self._deviceID else " ", i, devname
@@ -864,6 +835,7 @@ class GPUApplication(object):
             #print('Resetting command buffer... ', end='')
             vk.vkQueueWaitIdle(self._queue)
             vk.vkResetCommandBuffer(self._commandBuffer, 0)
+            self._timestampLabels = []
             #print('Done!')
 
 
@@ -944,22 +916,16 @@ class GPUApplication(object):
             # and we will not be sure that the command has finished executing unless we wait for the fence.
             # Hence, we use a fence here.
             vk.vkWaitForFences(self._device, 1, [self._fence], vk.VK_TRUE, 100000000000)
-            vk.vkResetFences(self._device, 1, [self._fence])
+            vk.vkResetFences(  self._device, 1, [self._fence])
             
 
-    def cmdClearBuffer(self, buffer_obj, timestamp=False):
-        def func(self, buffer_obj, timestamp=False):
+    def cmdClearBuffer(self, buffer_obj):
+        def func(self, buffer_obj):
             vk.vkCmdFillBuffer(
                 self._commandBuffer, buffer_obj._buffer, 0, buffer_obj._bufferSize, 0
             )
-            if timestamp == True:
-                self.cmdAddTimestamp("clearBuffer").writeCommand()
-            elif isinstance(timestamp, str):
-                self.cmdAddTimestamp(timestamp).writeCommand()
-            else:
-                pass
 
-        return GPUCommand(func, [self, buffer_obj], {"timestamp": timestamp})
+        return GPUCommand(func, [self, buffer_obj], {})
 
     def sync(self):
         vk.vkCmdPipelineBarrier(
@@ -1019,10 +985,10 @@ class GPUApplication(object):
             self._device, self._queryPool, 0, length, dsize * length, pData, dsize, 0
         )
 
-        result_arr = np.array([*queryResult]) * 1e-6  # in ms
+        result_arr = np.array([*queryResult]) * self._timestampPeriod * 1e-6  # in ms
         result_arr -= result_arr[0]
-        result_dict = dict(zip(self._timestampLabels, result_arr))
-        result_dict["total"] = result_arr[-1]
+        result_dict = dict(zip(self._timestampLabels[:-1], result_arr[1:]-result_arr[:-1]))
+        result_dict["Total"] = result_arr[-1]
 
         return result_dict
 
@@ -1250,8 +1216,8 @@ class GPUBuffer:
                                                             "size":size, 
                                                             "transfer_now":False})
 
-    def cmdClearBuffer(self, timestamp=False):
-        return self.app.cmdClearBuffer(self, timestamp=timestamp)
+    def cmdClearBuffer(self):
+        return self.app.cmdClearBuffer(self)
 
 
     def setBatchSize(self, batch, grow_only=True, factor=1.5):

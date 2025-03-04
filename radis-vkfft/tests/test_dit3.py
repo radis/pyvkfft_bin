@@ -168,12 +168,12 @@ shader_path = os.path.dirname(__file__)
 app = GPUApplication(deviceID=0, path=shader_path)
 #app.print_memory_properties()
 
-app.init_d = GPUBuffer(sizeof(init_t), usage='uniform', binding=0)
-app.iter_d = GPUBuffer(sizeof(iter_t), usage='uniform', binding=1)
-app.database_d = GPUBuffer(database.nbytes, binding=2)
-app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3)
-app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4)
-app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect')
+app.indirect_d = GPUBuffer(sizeof(workGroupSizeArray_t), usage='indirect', binding=10) #host_visible, device_local, (host_cached)
+app.init_d = GPUBuffer(sizeof(init_t), usage='uniform', binding=0)  #host_visible, device_local, (host_cached)
+app.iter_d = GPUBuffer(sizeof(iter_t), usage='uniform', binding=1)  #host_visible, device_local, (host_cached) 
+app.database_d = GPUBuffer(database.nbytes, binding=2) #req: large, device_local
+app.S_kl_d = GPUBuffer(fftSize=Nt, binding=3) #req: large, device_local
+app.spectrum_d = GPUBuffer(fftSize=Nt, binding=4) #req: device_local, host_visible, host_cached, (large)
 
 
 

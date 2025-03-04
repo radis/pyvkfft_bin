@@ -69,7 +69,7 @@ LIBRARY_API VkFFTConfiguration* make_config(const long*, const int, const int, c
                                 const int, const size_t, const int, const int, const int, const int,
                                 const int, const int, const size_t, const long*,
                                 const int, const int, const int, const int, const int, const int, const int, const int, 
-                                const long*, const char*, const int);
+                                const long*, const char*, const int, const int);
 
 
 LIBRARY_API VkFFTApplication* init_app(const VkFFTConfiguration*, int*);
@@ -193,17 +193,20 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
                                 const int coalescedMemory, const int numSharedBanks,
                                 const int aimThreads, const int performBandwidthBoost,
                                 const int registerBoostNonPow2, const int registerBoost4Step,
-                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name, const int exclusive_plan)
+                                const int warpSize, const int specifyOffset, const long* grouped_batch, const char* name, const int exclusive_plan,
+								const int debug)
 
 {
   VkFFTConfiguration *config = new VkFFTConfiguration({});
   
-  std::string fname = "";
-  fname += name;
-  fname += "_debug.txt";
-  myfile.open (fname);
-  myfile << "Debug file.\n";
-  
+  if (debug){
+	  std::string fname = "";
+	  fname += name;
+	  fname += "_debug.txt";
+	  myfile.open (fname);
+	  myfile << "Debug file.\n";
+	  }
+  config->enableDebug = debug;
   config->FFTdim = fftdim;
   for(int i=0; i<VKFFT_MAX_FFT_DIMENSIONS; i++) config->size[i] = size[i];
   config->numberBatches = n_batch;
@@ -298,8 +301,9 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
   config->disableMergeSequencesR2C = 1;
   config->useLUT = -1;
   
-
-  myfile << "make_config: "<<config<<" "<<endl
+  if (debug){
+  
+	myfile << "make_config: "<<config<<" "<<endl
        << config->buffer<<", "<< *(config->buffer)<< endl
        << "size: "<<size[0] << " " << size[1] << " " << size[2] << " " << size[3]<< ", FFTdim: " << config->FFTdim << endl
        << "skip: "<<skip[0] << " " << skip[1] << " " << skip[2] << " " << skip[3]<< ", nbatch: " << config->numberBatches << endl
@@ -309,11 +313,11 @@ VkFFTConfiguration* make_config(const long* size, const int bufInSize, const int
 	   << "bufferSize: "<< config->bufferSize[0] <<endl;
 	   //<< "uboSize: "<<config->currentBatchUBOSize<<" , uboOffset: " << config->currentBatchUBOOffset <<endl;
 	  
-  myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
+	myfile<<name<< " fwd " << config->makeForwardPlanOnly <<" inv "<<config->makeInversePlanOnly<<endl;
   
-  myfile << "\n End of debug file.\n";
-  myfile.close();
-
+	myfile << "\n End of debug file.\n";
+	myfile.close();
+  }
   return config;
 }
 

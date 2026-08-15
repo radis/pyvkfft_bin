@@ -1,3 +1,8 @@
+Deprecation notice
+==================
+This repo is no longer in use; the C++ code has moved to VkFFT-radis, the python code has moved to radis itself. The repo is still available as read-only.
+
+
 
 pyvkfft_bin - Binaries for PyVkFFT
 ===========================================================================================================
